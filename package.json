@@ -1,0 +1,19 @@
+{
+  "name": "stock-analyzer-worker",
+  "version": "1.0.0",
+  "description": "Yahoo Finance Stock Analysis API on Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "hono": "^3.11.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^4.42.0"
+  }
+}

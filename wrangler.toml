@@ -1,0 +1,26 @@
+name = "stock-analyzer-api"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# KV namespace for caching (optional but recommended)
+# Uncomment and add your namespace IDs after creating them with:
+# npx wrangler kv:namespace create "STOCK_CACHE"
+# npx wrangler kv:namespace create "STOCK_CACHE" --preview
+
+[[kv_namespaces]]
+binding = "STOCK_CACHE"
+id = "9925258550724f37bf163ad2a1f6569f"
+preview_id = "8665e2b2fad449f89f3bd8d986e11892"
+
+# Rate limiting with Durable Objects (optional)
+# [[durable_objects.bindings]]
+# name = "RATE_LIMITER"
+# class_name = "RateLimiter"
+
+# For production
+# [env.production]
+# route = "api.yourdomain.com/*"
