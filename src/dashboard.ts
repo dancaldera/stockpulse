@@ -70,19 +70,6 @@ export const dashboardHTML = `<!DOCTYPE html>
             -webkit-text-fill-color: transparent;
             background-clip: text;
             letter-spacing: -0.02em;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-        }
-
-        .header h1::before {
-            content: '📊';
-            font-size: 3.5rem;
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
 
         .header p {
