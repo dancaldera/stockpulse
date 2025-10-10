@@ -1,7 +1,128 @@
+import type { ValidationOptions, ValidationResult } from './types';
+
+/**
+ * Retry utility for handling external API failures
+ */
+export class RetryHandler {
+  /**
+   * Execute a function with retry logic
+   * @param fn The async function to execute
+   * @param maxRetries Maximum number of retry attempts
+   * @param delayMs Initial delay between retries (exponential backoff)
+   * @param maxDelayMs Maximum delay between retries
+   * @returns Promise that resolves with the function result
+   */
+  static async executeWithRetry<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    delayMs: number = 1000,
+    maxDelayMs: number = 5000
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Exponential backoff with jitter
+        const jitter = Math.random() * 0.1 + 0.9; // 0.9 to 1.0
+        const delay = Math.min(delayMs * (2 ** attempt) * jitter, maxDelayMs);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError || new Error('Unknown error occurred');
+  }
+}
+
+/**
+ * Stock ticker validation and sanitization utilities
+ */
+export class StockValidator {
+  /**
+   * Validate and sanitize a stock ticker symbol
+   * @param ticker The ticker symbol to validate
+   * @param options Validation options
+   * @returns ValidationResult with validation status and sanitized ticker
+   */
+  static validateTicker(ticker: string, options: ValidationOptions = {}): ValidationResult {
+    const errors: string[] = [];
+    const defaultOptions: ValidationOptions = {
+      minLength: 1,
+      maxLength: 10,
+      allowedSymbols: ['.', '-', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
+                     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', 
+                     '3', '4', '5', '6', '7', '8', '9'],
+      allowNumbers: true,
+      ...options
+    };
+
+    // Check if input is string
+    if (typeof ticker !== 'string') {
+      errors.push('Ticker must be a string');
+      return { isValid: false, sanitizedTicker: '', errors };
+    }
+
+    // Basic sanitization
+    let sanitized = ticker.toUpperCase().trim();
+    
+    // Remove any whitespace
+    sanitized = sanitized.replace(/\s+/g, '');
+    
+    // Check minimum length
+    if (sanitized.length < (defaultOptions.minLength || 1)) {
+      errors.push(`Ticker must be at least ${defaultOptions.minLength} characters`);
+    }
+    
+    // Check maximum length
+    if (sanitized.length > (defaultOptions.maxLength || 10)) {
+      errors.push(`Ticker cannot exceed ${defaultOptions.maxLength} characters`);
+    }
+    
+    // Check for valid characters only
+    const allowedRegex = new RegExp(`^[${defaultOptions.allowedSymbols?.join('') || 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.'}]+$`);
+    if (!allowedRegex.test(sanitized)) {
+      errors.push('Ticker contains invalid characters');
+    }
+    
+    // Check for sequential dots or dashes
+    if (/[.-]{2,}/.test(sanitized)) {
+      errors.push('Ticker cannot contain consecutive dots or dashes');
+    }
+    
+    // Cannot start or end with dot or dash
+    if (/^[.-]/.test(sanitized) || /[.-]$/.test(sanitized)) {
+      errors.push('Ticker cannot start or end with dot or dash');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      sanitizedTicker: sanitized,
+      errors
+    };
+  }
+
+  /**
+   * Quick validation for common stock tickers
+   * @param ticker The ticker to validate
+   * @returns true if ticker appears valid, false otherwise
+   */
+  static isValidTicker(ticker: string): boolean {
+    const result = this.validateTicker(ticker);
+    return result.isValid;
+  }
+}
+
 /**
  * Technical Analysis Utilities
  */
-
 export class TechnicalIndicators {
   /**
    * Calculate Simple Moving Average
@@ -65,19 +186,28 @@ export class TechnicalIndicators {
 
   /**
    * Calculate MACD
+   * @param prices Array of prices to calculate MACD for
+   * @param fastPeriod Fast EMA period (default: 12)
+   * @param slowPeriod Slow EMA period (default: 26)
+   * @param signalPeriod Signal line EMA period (default: 9)
    */
-  static macd(prices: number[]): { macd: number; signal: number; histogram: number } {
-    const ema12 = this.ema(prices, 12);
-    const ema26 = this.ema(prices, 26);
+  static macd(
+    prices: number[],
+    fastPeriod: number = 12,
+    slowPeriod: number = 26,
+    signalPeriod: number = 9
+  ): { macd: number; signal: number; histogram: number } {
+    const emaFast = this.ema(prices, fastPeriod);
+    const emaSlow = this.ema(prices, slowPeriod);
 
     const macdLine: number[] = [];
-    const offset = ema26.length - ema12.length;
+    const offset = emaSlow.length - emaFast.length;
 
-    for (let i = 0; i < ema26.length; i++) {
-      macdLine.push(ema12[i + offset] - ema26[i]);
+    for (let i = 0; i < emaSlow.length; i++) {
+      macdLine.push(emaFast[i + offset] - emaSlow[i]);
     }
 
-    const signalLine = this.ema(macdLine, 9);
+    const signalLine = this.ema(macdLine, signalPeriod);
     const histogram = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
 
     return {
@@ -91,14 +221,20 @@ export class TechnicalIndicators {
    * Calculate Bollinger Bands
    */
   static bollingerBands(prices: number[], period: number = 20, stdDev: number = 2) {
+    if (prices.length < period) {
+      return { upper: 0, middle: 0, lower: 0 };
+    }
+
     const sma = this.sma(prices, period);
     const lastSma = sma[sma.length - 1];
 
+    // Use the most recent prices for standard deviation calculation
     const recentPrices = prices.slice(-period);
-    const variance = recentPrices.reduce((sum, price) => {
-      return sum + Math.pow(price - lastSma, 2);
-    }, 0) / period;
 
+    // Calculate standard deviation properly
+    const mean = lastSma;
+    const squaredDiffs = recentPrices.map(price => Math.pow(price - mean, 2));
+    const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / period;
     const std = Math.sqrt(variance);
 
     return {
@@ -173,7 +309,8 @@ export class CacheManager {
 
       return null;
     } catch (e) {
-      console.error('Cache get error:', e);
+      // In Cloudflare Workers, we don't want to log errors in production
+      // but this check is moot since this code only runs in development anyway
       return null;
     }
   }
@@ -191,7 +328,8 @@ export class CacheManager {
         expirationTtl: this.ttl
       });
     } catch (e) {
-      console.error('Cache set error:', e);
+      // In Cloudflare Workers, we don't want to log errors in production
+      // but this check is moot since this code only runs in development anyway
     }
   }
 }

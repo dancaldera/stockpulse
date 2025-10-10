@@ -8,8 +8,10 @@ A high-performance **Cloudflare Workers** stock analysis API that provides real-
 
 ✅ **Global Edge Deployment** - Runs on Cloudflare's 300+ data centers worldwide
 ✅ **Sub-50ms Response Times** - Leverages edge computing for instant analysis
+✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, or losers
+✅ **Multi-API Support** - FMP API with Yahoo Finance fallback
 ✅ **Comprehensive Analysis** - 12+ technical indicators + fundamentals
-✅ **KV Caching** - 5-minute cache to reduce API calls and improve performance
+✅ **Smart Caching** - 5-minute cache for analysis + 30-minute cache for ticker lists
 ✅ **Auto-scaling** - Handles millions of requests seamlessly
 ✅ **Zero Cold Starts** - Instant responses, no warm-up needed
 ✅ **Free Tier** - 100,000 requests/day included on Cloudflare's free plan
@@ -104,14 +106,33 @@ npm run tail
 ### Optional: Enable KV Caching
 
 ```bash
-# Create KV namespace for production
+# Create KV namespace for stock data caching
 npx wrangler kv namespace create "STOCK_CACHE"
-
-# Create KV namespace for preview
 npx wrangler kv namespace create "STOCK_CACHE" --preview
 
+# Create KV namespace for ticker list caching
+npx wrangler kv namespace create "TICKER_CACHE"
+npx wrangler kv namespace create "TICKER_CACHE" --preview
+
 # Copy the namespace IDs and update wrangler.toml:
-# Uncomment the [[kv_namespaces]] section and add your IDs
+# Update the [[kv_namespaces]] sections with your IDs
+```
+
+### Optional: Enable Dynamic Ticker Fetching
+
+```bash
+# Get a free API key from Financial Modeling Prep
+# Visit: https://site.financialmodelingprep.com/developer/docs
+
+# Set the API key as a secret (recommended)
+npx wrangler secret put FMP_API_KEY
+# Enter your API key when prompted
+
+# Or for development, add to .dev.vars file (don't commit!)
+echo "FMP_API_KEY=your_key_here" > .dev.vars
+
+# Configure ticker strategy in wrangler.toml (already set)
+# Options: most_active, gainers, losers, mixed, or static
 ```
 
 ### Custom Domain Setup
@@ -235,7 +256,71 @@ curl http://localhost:8787/api/analyze/AAPL
 
 ---
 
-### 4. Batch Analysis
+### 4. Market Scanner (Dynamic Ticker Selection)
+```bash
+GET /api/scanner?limit=20&strategy=most_active
+```
+
+Automatically scan the market based on real-time activity. Returns top opportunities sorted by potential gain.
+
+**Query Parameters:**
+- `limit` (optional): Number of results (1-50, default: 20)
+- `strategy` (optional): Ticker selection strategy
+  - `most_active`: Stocks with highest trading volume (default)
+  - `gainers`: Top performing stocks today
+  - `losers`: Worst performing stocks today
+  - `mixed`: Combination of actives and gainers
+  - `static`: Predefined popular ticker list
+
+**Example:**
+```bash
+# Get top 10 most active stocks
+curl "http://localhost:8787/api/scanner?limit=10&strategy=most_active"
+
+# Get top 25 gainers
+curl "http://localhost:8787/api/scanner?limit=25&strategy=gainers"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "ticker": "NVDA",
+      "recommendation": "STRONG BUY",
+      "confidence": 85.2,
+      "price": 875.50,
+      "potential_gain": 8.45,
+      "risk_reward_ratio": 2.8
+    },
+    {
+      "ticker": "TSLA",
+      "recommendation": "BUY",
+      "confidence": 62.3,
+      "price": 245.20,
+      "potential_gain": 5.12,
+      "risk_reward_ratio": 2.1
+    }
+  ],
+  "total": 2,
+  "strategy": "most_active"
+}
+```
+
+**How it works:**
+1. Fetches real-time market movers from Financial Modeling Prep API
+2. Falls back to Yahoo Finance trending stocks if FMP unavailable
+3. Falls back to static list if all APIs fail
+4. Caches ticker lists for 30 minutes to avoid rate limits
+5. Filters stocks: minimum $5 price, 1M+ daily volume
+6. Analyzes each ticker and sorts by potential gain
+
+**Note:** Without an FMP API key, the system uses Yahoo Finance trending stocks or the static ticker list. For true real-time market movers (most active, gainers, losers), an FMP API key is recommended (free tier available).
+
+---
+
+### 5. Batch Analysis
 ```bash
 POST /api/batch
 Content-Type: application/json
@@ -916,6 +1001,8 @@ Contributions welcome! Please:
 
 ## 🗺️ Roadmap
 
+- [x] Dynamic ticker selection with market movers
+- [x] Multi-API support with fallback mechanisms
 - [ ] WebSocket support for real-time streaming
 - [ ] Multiple timeframe analysis (1h, 4h, 1d, 1w)
 - [ ] Machine learning price predictions

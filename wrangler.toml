@@ -5,21 +5,35 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
+# Ticker selection strategy: most_active, gainers, losers, mixed, or static
+TICKER_STRATEGY = "most_active"
 
-# KV namespace for caching (optional but recommended)
-# Uncomment and add your namespace IDs after creating them with:
-# npx wrangler kv:namespace create "STOCK_CACHE"
-# npx wrangler kv:namespace create "STOCK_CACHE" --preview
+# Secrets (set with: npx wrangler secret put FMP_API_KEY)
+# FMP_API_KEY = "your_key_here" - DO NOT commit this! Use wrangler secret put
 
+# KV namespace for stock data caching (optional but recommended)
+# Create with: npx wrangler kv:namespace create "STOCK_CACHE"
 [[kv_namespaces]]
 binding = "STOCK_CACHE"
 id = "9925258550724f37bf163ad2a1f6569f"
 preview_id = "8665e2b2fad449f89f3bd8d986e11892"
 
-# Rate limiting with Durable Objects (optional)
-# [[durable_objects.bindings]]
-# name = "RATE_LIMITER"
-# class_name = "RateLimiter"
+# KV namespace for ticker list caching (optional but recommended)
+# Create with: npx wrangler kv:namespace create "TICKER_CACHE"
+[[kv_namespaces]]
+binding = "TICKER_CACHE"
+id = "add_your_ticker_cache_id_here"
+preview_id = "add_your_ticker_cache_preview_id_here"
+
+# Rate limiting with Durable Objects
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
 
 # For production
 # [env.production]

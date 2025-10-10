@@ -1,3 +1,26 @@
+export interface ValidationResult {
+  isValid: boolean;
+  sanitizedTicker: string;
+  errors: string[];
+}
+
+export interface ChartData {
+  dates: string[];
+  prices: number[];
+  sma_50_values: number[];
+  sma_200_values: number[];
+  ema_20_values: number[];
+  rsi_values: number[];
+  macd_values: number[];
+  macd_signal_values: number[];
+  macd_histogram_values: number[];
+  bb_upper: number[];
+  bb_middle: number[];
+  bb_lower: number[];
+  volumes: number[];
+  volume_sma: number[];
+}
+
 export interface StockSignal {
   ticker: string;
   recommendation: 'STRONG BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG SELL';
@@ -10,6 +33,7 @@ export interface StockSignal {
   risk_reward_ratio: number;
   reasons: string[];
   metrics: StockMetrics;
+  chartData: ChartData;
   timestamp: string;
 }
 
@@ -36,8 +60,37 @@ export interface StockMetrics {
 
 export type Bindings = {
   STOCK_CACHE?: KVNamespace;
+  TICKER_CACHE?: KVNamespace;
   RATE_LIMITER?: DurableObjectNamespace;
   ENVIRONMENT?: string;
+  FMP_API_KEY?: string;
+  TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static';
+}
+
+export interface ValidationOptions {
+  minLength?: number;
+  maxLength?: number;
+  allowedSymbols?: string[];
+  allowNumbers?: boolean;
+}
+
+export interface AnalysisConfig {
+  shortMovingAverage: number;
+  longMovingAverage: number;
+  rsiPeriod: number;
+  rsiOversold: number;
+  rsiOverbought: number;
+  macdFast: number;
+  macdSlow: number;
+  macdSignal: number;
+  bollingerPeriod: number;
+  bollingerStdDev: number;
+  atrPeriod: number;
+  volumePeriod: number;
+  cacheTtl: number;
+  maxRetryAttempts: number;
+  retryDelay: number;
+  maxRetryDelay: number;
 }
 
 export interface CacheEntry {

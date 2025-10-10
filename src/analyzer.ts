@@ -1,41 +1,116 @@
 import { YahooFinance } from './yahooFinance';
-import { StockSignal, StockMetrics } from './types';
-import { TechnicalIndicators } from './utils';
+import { StockSignal, StockMetrics, AnalysisConfig, ChartData } from './types';
+import { TechnicalIndicators, RetryHandler } from './utils';
 
+export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
+  shortMovingAverage: 50,
+  longMovingAverage: 200,
+  rsiPeriod: 14,
+  rsiOversold: 30,
+  rsiOverbought: 70,
+  macdFast: 12,
+  macdSlow: 26,
+  macdSignal: 9,
+  bollingerPeriod: 20,
+  bollingerStdDev: 2,
+  atrPeriod: 14,
+  volumePeriod: 20,
+  cacheTtl: 300,
+  maxRetryAttempts: 3,
+  retryDelay: 1000,
+  maxRetryDelay: 5000
+};
+
+/**
+ * Stock analysis engine with configurable parameters for technical indicators
+ * Provides comprehensive stock analysis using multiple technical indicators
+ */
 export class StockAnalyzer {
-  private shortWindow: number;
-  private longWindow: number;
+  private config: AnalysisConfig;
 
-  constructor(shortWindow: number = 50, longWindow: number = 200) {
-    this.shortWindow = shortWindow;
-    this.longWindow = longWindow;
+  /**
+   * Creates a new stock analyzer with optional configuration
+   * @param config Optional configuration for analysis parameters
+   */
+  constructor(config?: Partial<AnalysisConfig>) {
+    this.config = { ...DEFAULT_ANALYSIS_CONFIG, ...config };
   }
 
+  /**
+   * Returns a copy of the current analysis configuration
+   * @returns Current analysis configuration
+   */
+  getConfig(): AnalysisConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Updates the analysis configuration with new parameters
+   * @param newConfig Partial configuration to merge with existing config
+   */
+  updateConfig(newConfig: Partial<AnalysisConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+  }
+
+  /**
+   * Analyzes a stock ticker and returns comprehensive technical analysis
+   * @param ticker Stock ticker symbol to analyze
+   * @returns Promise resolving to analysis results with recommendation, confidence, and technical indicators
+   * @throws Error if ticker is invalid or data fetching fails
+   */
   async analyze(ticker: string): Promise<StockSignal> {
     try {
-      // Fetch historical data
+      // Fetch historical data with retry logic
+      // Request more calendar days to ensure we get enough trading days
+      // Yahoo Finance only returns trading days (Mon-Fri excluding holidays)
+      // To get ~250 trading days, we need ~365 calendar days
+      const daysToRequest = Math.ceil((this.config.longMovingAverage + 50) * 1.5); // ~375 days
       const queryOptions = {
-        period1: new Date(Date.now() - (this.longWindow + 50) * 24 * 60 * 60 * 1000),
+        period1: new Date(Date.now() - daysToRequest * 24 * 60 * 60 * 1000),
         period2: new Date(),
       };
 
-      const historical = await YahooFinance.historical(ticker, queryOptions);
-
-      if (historical.length < this.shortWindow) {
-        throw new Error(`Insufficient data for ${ticker}`);
+      let historical: any[];
+      try {
+        historical = await RetryHandler.executeWithRetry(
+          () => YahooFinance.historical(ticker, queryOptions),
+          this.config.maxRetryAttempts,
+          this.config.retryDelay,
+          this.config.maxRetryDelay
+        );
+      } catch (error) {
+        throw new Error(`Failed to fetch historical data after retries: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
-      // Fetch quote for real-time data
-      const quote = await YahooFinance.quote(ticker);
+      if (historical.length < this.config.shortMovingAverage) {
+        throw new Error(`Insufficient data for ${ticker}: need at least ${this.config.shortMovingAverage} data points, got ${historical.length}`);
+      }
+
+      // Fetch quote for real-time data with retry logic
+      let quote: any;
+      try {
+        quote = await RetryHandler.executeWithRetry(
+          () => YahooFinance.quote(ticker),
+          this.config.maxRetryAttempts,
+          this.config.retryDelay,
+          this.config.maxRetryDelay
+        );
+      } catch (error) {
+        throw new Error(`Failed to fetch quote data after retries: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       // Extract price arrays
       const closes = historical.map(d => d.close);
       const highs = historical.map(d => d.high);
       const lows = historical.map(d => d.low);
       const volumes = historical.map(d => d.volume);
+      const dates = historical.map(d => new Date(d.date).toISOString());
 
       // Calculate metrics
       const metrics = this.calculateMetrics(closes, highs, lows, volumes, quote);
+
+      // Generate chart data
+      const chartData = this.generateChartData(closes, highs, lows, volumes, dates);
 
       // Calculate score
       const { score, reasons } = this.calculateScore(metrics);
@@ -59,6 +134,7 @@ export class StockAnalyzer {
         risk_reward_ratio: parseFloat(((target - currentPrice) / (currentPrice - stopLoss)).toFixed(2)),
         reasons,
         metrics,
+        chartData,
         timestamp: new Date().toISOString()
       };
     } catch (error: any) {
@@ -74,34 +150,34 @@ export class StockAnalyzer {
     quote: any
   ): StockMetrics {
     // Moving averages
-    const sma50 = TechnicalIndicators.sma(closes, this.shortWindow);
-    const sma200 = TechnicalIndicators.sma(closes, this.longWindow);
+    const sma50 = TechnicalIndicators.sma(closes, this.config.shortMovingAverage);
+    const sma200 = TechnicalIndicators.sma(closes, this.config.longMovingAverage);
     const ema20 = TechnicalIndicators.ema(closes, 20);
 
     // RSI
-    const rsi = TechnicalIndicators.rsi(closes, 14);
+    const rsi = TechnicalIndicators.rsi(closes, this.config.rsiPeriod);
 
     // MACD
-    const { macd, signal, histogram } = TechnicalIndicators.macd(closes);
+    const { macd, signal, histogram } = TechnicalIndicators.macd(closes, this.config.macdFast, this.config.macdSlow, this.config.macdSignal);
 
     // Bollinger Bands
-    const bb = TechnicalIndicators.bollingerBands(closes);
+    const bb = TechnicalIndicators.bollingerBands(closes, this.config.bollingerPeriod, this.config.bollingerStdDev);
     const currentPrice = closes[closes.length - 1];
     const bbPosition = (currentPrice - bb.lower) / (bb.upper - bb.lower);
 
     // Volume
-    const volumeSma = TechnicalIndicators.sma(volumes, 20);
+    const volumeSma = TechnicalIndicators.sma(volumes, this.config.volumePeriod);
     const volumeRatio = volumes[volumes.length - 1] / volumeSma[volumeSma.length - 1];
 
     // ATR
-    const atr = TechnicalIndicators.atr(highs, lows, closes, 14);
+    const atr = TechnicalIndicators.atr(highs, lows, closes, this.config.atrPeriod);
 
     // Trend strength
-    const trendStrength = TechnicalIndicators.trendStrength(closes.slice(-this.shortWindow));
+    const trendStrength = TechnicalIndicators.trendStrength(closes.slice(-this.config.shortMovingAverage));
 
     // Price change
-    const priceChange50d = ((currentPrice - closes[closes.length - this.shortWindow]) /
-                            closes[closes.length - this.shortWindow]) * 100;
+    const priceChange50d = ((currentPrice - closes[closes.length - this.config.shortMovingAverage]) /
+                            closes[closes.length - this.config.shortMovingAverage]) * 100;
 
     return {
       current_price: currentPrice,
@@ -128,74 +204,153 @@ export class StockAnalyzer {
   private calculateScore(metrics: StockMetrics): { score: number; reasons: string[] } {
     let score = 0;
     const reasons: string[] = [];
+    const warnings: string[] = [];
 
-    // 1. Golden Cross / Death Cross
+    // Track bullish/bearish indicators for confirmation
+    let bullishCount = 0;
+    let bearishCount = 0;
+
+    // 1. Golden Cross / Death Cross (REDUCED weight from 20 to 15)
     if (metrics.sma_50 > metrics.sma_200) {
-      score += 20;
+      score += 15;
+      bullishCount++;
       reasons.push('✓ Golden Cross: 50-day MA above 200-day MA (bullish)');
     } else {
-      score -= 20;
+      score -= 15;
+      bearishCount++;
       reasons.push('✗ Death Cross: 50-day MA below 200-day MA (bearish)');
     }
 
-    // 2. RSI
-    if (metrics.rsi < 30) {
+    // 2. RSI - More nuanced scoring
+    if (metrics.rsi < this.config.rsiOversold) {
       score += 15;
+      bullishCount++;
       reasons.push(`✓ RSI oversold at ${metrics.rsi.toFixed(1)} (potential bounce)`);
-    } else if (metrics.rsi > 70) {
+    } else if (metrics.rsi > this.config.rsiOverbought) {
       score -= 15;
+      bearishCount++;
       reasons.push(`✗ RSI overbought at ${metrics.rsi.toFixed(1)} (potential pullback)`);
+      // EXTREME overbought is a stronger warning
+      if (metrics.rsi > 75) {
+        score -= 5;
+        warnings.push(`⚠ EXTREME overbought (RSI: ${metrics.rsi.toFixed(1)})`);
+      }
     } else if (metrics.rsi >= 40 && metrics.rsi <= 60) {
       score += 5;
       reasons.push(`✓ RSI neutral at ${metrics.rsi.toFixed(1)} (healthy)`);
+    } else if (metrics.rsi < 25) {
+      // EXTREME oversold is even more bullish
+      score += 5;
+      warnings.push(`⚠ EXTREME oversold (RSI: ${metrics.rsi.toFixed(1)}) - high risk/reward`);
     }
 
-    // 3. MACD
-    if (metrics.macd > metrics.macd_signal && metrics.macd_histogram > 0) {
-      score += 15;
-      reasons.push('✓ MACD bullish crossover');
-    } else if (metrics.macd < metrics.macd_signal && metrics.macd_histogram < 0) {
-      score -= 15;
-      reasons.push('✗ MACD bearish crossover');
+    // 3. MACD (INCREASED weight from 15 to 20 when BOTH line and histogram confirm)
+    const hasMacdData = metrics.macd_signal !== null && metrics.macd_histogram !== null;
+
+    if (hasMacdData) {
+      if (metrics.macd > metrics.macd_signal && metrics.macd_histogram > 0) {
+        score += 20;
+        bullishCount++;
+        reasons.push('✓ MACD bullish crossover (strong momentum)');
+      } else if (metrics.macd < metrics.macd_signal && metrics.macd_histogram < 0) {
+        score -= 20;
+        bearishCount++;
+        reasons.push('✗ MACD bearish crossover (weak momentum)');
+      } else if (metrics.macd > metrics.macd_signal) {
+        // Line above signal but histogram not positive yet
+        score += 8;
+        reasons.push('✓ MACD line above signal (building momentum)');
+      } else if (metrics.macd < metrics.macd_signal) {
+        score -= 8;
+        reasons.push('✗ MACD line below signal (losing momentum)');
+      }
+    } else {
+      // No MACD data available - use a simpler momentum indicator
+      if (metrics.price_change_50d > 10) {
+        score += 8;
+        reasons.push(`✓ Strong 50-day price momentum (+${metrics.price_change_50d.toFixed(1)}%)`);
+      } else if (metrics.price_change_50d < -10) {
+        score -= 8;
+        reasons.push(`✗ Weak 50-day price momentum (${metrics.price_change_50d.toFixed(1)}%)`);
+      }
     }
 
-    // 4. Price vs EMA
+    // 4. Price vs EMA (INCREASED from 10 to 12)
     if (metrics.current_price > metrics.ema_20) {
-      score += 10;
+      score += 12;
+      bullishCount++;
       reasons.push('✓ Price above 20-day EMA (short-term uptrend)');
     } else {
-      score -= 10;
+      score -= 12;
+      bearishCount++;
       reasons.push('✗ Price below 20-day EMA (short-term downtrend)');
     }
 
-    // 5. Bollinger Bands
+    // 5. Bollinger Bands - More sophisticated analysis
     if (metrics.bb_position < 0.2) {
       score += 10;
       reasons.push('✓ Near lower Bollinger Band (oversold)');
+      // Extra boost if VERY close to lower band
+      if (metrics.bb_position < 0.05) {
+        score += 5;
+        warnings.push('⚠ Touching lower Bollinger Band (extreme oversold)');
+      }
     } else if (metrics.bb_position > 0.8) {
       score -= 10;
       reasons.push('✗ Near upper Bollinger Band (overbought)');
+      // Extra penalty if VERY close to upper band
+      if (metrics.bb_position > 0.95) {
+        score -= 5;
+        warnings.push('⚠ Touching upper Bollinger Band (extreme overbought)');
+      }
     }
 
-    // 6. Volume
+    // 6. Volume (INCREASED from 10 to 15 - CRITICAL for confirmation)
     if (metrics.volume_ratio > 1.5) {
-      score += 10;
-      reasons.push(`✓ High volume (${metrics.volume_ratio.toFixed(1)}x average)`);
+      score += 15;
+      reasons.push(`✓ High volume (${metrics.volume_ratio.toFixed(1)}x average) - strong interest`);
+      // Very high volume is even more significant
+      if (metrics.volume_ratio > 2.5) {
+        score += 5;
+        warnings.push(`⚠ VERY high volume (${metrics.volume_ratio.toFixed(1)}x) - major move`);
+      }
     } else if (metrics.volume_ratio < 0.5) {
-      score -= 5;
-      reasons.push(`⚠ Low volume (${metrics.volume_ratio.toFixed(1)}x average)`);
+      score -= 10;  // INCREASED penalty from -5
+      reasons.push(`✗ Low volume (${metrics.volume_ratio.toFixed(1)}x average) - weak conviction`);
+      // Extremely low volume is very bearish
+      if (metrics.volume_ratio < 0.3) {
+        score -= 5;
+        warnings.push(`⚠ EXTREMELY low volume (${metrics.volume_ratio.toFixed(1)}x) - no interest`);
+      }
     }
 
-    // 7. Trend Strength
-    if (metrics.trend_strength > 0.7) {
-      score += 10;
+    // 7. Trend Strength (INCREASED from 10 to 15)
+    const strongTrendThreshold = 0.7;
+    if (metrics.trend_strength > strongTrendThreshold) {
+      score += 15;
+      bullishCount++;
       reasons.push(`✓ Strong uptrend (strength: ${metrics.trend_strength.toFixed(2)})`);
-    } else if (metrics.trend_strength < -0.7) {
-      score -= 10;
+    } else if (metrics.trend_strength < -strongTrendThreshold) {
+      score -= 15;
+      bearishCount++;
       reasons.push(`✗ Strong downtrend (strength: ${metrics.trend_strength.toFixed(2)})`);
+    } else if (Math.abs(metrics.trend_strength) < 0.3) {
+      // Ranging market - less reliable signals
+      score -= 5;
+      warnings.push('⚠ Weak/ranging market - choppy conditions');
     }
 
-    // 8. Fundamentals
+    // 8. Extended Move Detection (NEW)
+    const distanceFromSma200 = ((metrics.current_price - metrics.sma_200) / metrics.sma_200) * 100;
+    if (distanceFromSma200 > 25) {
+      score -= 10;
+      warnings.push(`⚠ Extended above SMA200 (+${distanceFromSma200.toFixed(1)}%) - overheated`);
+    } else if (distanceFromSma200 < -25) {
+      score += 10;
+      warnings.push(`⚠ Extended below SMA200 (${distanceFromSma200.toFixed(1)}%) - oversold`);
+    }
+
+    // 9. Fundamentals (slight adjustment)
     if (metrics.pe_ratio && metrics.forward_pe) {
       if (metrics.forward_pe < 15 && metrics.pe_ratio < 25) {
         score += 10;
@@ -211,14 +366,54 @@ export class StockAnalyzer {
       reasons.push(`✓ Excellent PEG ratio: ${metrics.peg_ratio.toFixed(2)}`);
     }
 
-    return { score, reasons };
+    // 10. VETO CONDITIONS (NEW - can override score)
+    let vetoReason: string | null = null;
+
+    // Cannot BUY if both RSI > 75 AND Bollinger > 0.9 (extreme overbought)
+    if (metrics.rsi > 75 && metrics.bb_position > 0.9) {
+      if (score > 0) {
+        const reduction = Math.min(score, 25);
+        score -= reduction;
+        vetoReason = `🛑 VETO: Extreme overbought (RSI: ${metrics.rsi.toFixed(1)}, BB: ${(metrics.bb_position * 100).toFixed(0)}%) - reduced score by ${reduction}`;
+      }
+    }
+
+    // Cannot SELL if both RSI < 25 AND Bollinger < 0.1 (extreme oversold)
+    if (metrics.rsi < 25 && metrics.bb_position < 0.1) {
+      if (score < 0) {
+        const reduction = Math.min(Math.abs(score), 25);
+        score += reduction;
+        vetoReason = `🛑 VETO: Extreme oversold (RSI: ${metrics.rsi.toFixed(1)}, BB: ${(metrics.bb_position * 100).toFixed(0)}%) - reduced bearish score by ${reduction}`;
+      }
+    }
+
+    // 11. MULTI-INDICATOR CONFIRMATION (NEW)
+    // For BUY: need at least 3 of 4 key indicators bullish
+    // For SELL: need at least 3 of 4 key indicators bearish
+    if (score > 30 && bullishCount < 3) {
+      score -= 10;
+      warnings.push('⚠ Bullish score lacks confirmation (fewer than 3 bullish indicators)');
+    }
+    if (score < -30 && bearishCount < 3) {
+      score += 10;
+      warnings.push('⚠ Bearish score lacks confirmation (fewer than 3 bearish indicators)');
+    }
+
+    // Combine all reasons and warnings
+    const allReasons = [...reasons, ...warnings];
+    if (vetoReason) {
+      allReasons.unshift(vetoReason);  // Add veto at the beginning
+    }
+
+    return { score, reasons: allReasons };
   }
 
   private getRecommendation(score: number): 'STRONG BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG SELL' {
-    if (score >= 50) return 'STRONG BUY';
-    if (score >= 25) return 'BUY';
-    if (score >= -25) return 'HOLD';
-    if (score >= -50) return 'SELL';
+    // More conservative thresholds to reduce false positives
+    if (score >= 60) return 'STRONG BUY';
+    if (score >= 40) return 'BUY';
+    if (score >= -40) return 'HOLD';
+    if (score >= -60) return 'SELL';
     return 'STRONG SELL';
   }
 
@@ -245,5 +440,141 @@ export class StockAnalyzer {
         stopLoss: currentPrice - (1 * atr)
       };
     }
+  }
+
+  private generateChartData(
+    closes: number[],
+    highs: number[],
+    lows: number[],
+    volumes: number[],
+    dates: string[]
+  ): ChartData {
+    // Calculate full arrays for all indicators
+    const sma50Array = TechnicalIndicators.sma(closes, this.config.shortMovingAverage);
+    const sma200Array = TechnicalIndicators.sma(closes, this.config.longMovingAverage);
+    const ema20Array = TechnicalIndicators.ema(closes, 20);
+
+    // Calculate RSI values for all data points
+    const rsiValues: number[] = [];
+    for (let i = this.config.rsiPeriod; i < closes.length; i++) {
+      const rsi = TechnicalIndicators.rsi(closes.slice(0, i + 1), this.config.rsiPeriod);
+      rsiValues.push(rsi);
+    }
+
+    // Calculate MACD arrays
+    // MACD line is the difference between 12-period EMA and 26-period EMA
+    const emaFast = TechnicalIndicators.ema(closes, this.config.macdFast); // 12-period
+    const emaSlow = TechnicalIndicators.ema(closes, this.config.macdSlow); // 26-period
+
+    // Both EMAs should have the same length as they're calculated on the same data
+    // MACD values start when we have both EMAs available
+    const macdValues: number[] = [];
+    const macdStartIndex = this.config.macdSlow - 1; // MACD starts at index 25 (needs 26 data points)
+
+    // Calculate MACD line for each point where both EMAs are available
+    for (let i = 0; i < emaSlow.length; i++) {
+      macdValues.push(emaFast[emaFast.length - emaSlow.length + i] - emaSlow[i]);
+    }
+
+    // Signal line is 9-period EMA of MACD line
+    const macdSignalValues = TechnicalIndicators.ema(macdValues, this.config.macdSignal);
+
+    // Histogram is MACD line minus Signal line
+    // Both arrays need to be aligned since signal is shorter
+    const macdHistogramValues: number[] = [];
+    const signalOffset = macdValues.length - macdSignalValues.length;
+    for (let i = 0; i < macdSignalValues.length; i++) {
+      macdHistogramValues.push(macdValues[i + signalOffset] - macdSignalValues[i]);
+    }
+
+    // Calculate Bollinger Bands arrays
+    const bbUpper: number[] = [];
+    const bbMiddle: number[] = [];
+    const bbLower: number[] = [];
+
+    for (let i = this.config.bollingerPeriod - 1; i < closes.length; i++) {
+      // Calculate SMA for this point
+      const windowStart = Math.max(0, i - this.config.bollingerPeriod + 1);
+      const priceWindow = closes.slice(windowStart, i + 1);
+
+      // Calculate SMA (middle band)
+      const sma = priceWindow.reduce((sum, p) => sum + p, 0) / priceWindow.length;
+
+      // Calculate standard deviation
+      const squaredDiffs = priceWindow.map(p => Math.pow(p - sma, 2));
+      const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / priceWindow.length;
+      const std = Math.sqrt(variance);
+
+      // Calculate bands
+      bbMiddle.push(sma);
+      bbUpper.push(sma + (this.config.bollingerStdDev * std));
+      bbLower.push(sma - (this.config.bollingerStdDev * std));
+    }
+
+    // Calculate volume SMA
+    const volumeSmaArray = TechnicalIndicators.sma(volumes, this.config.volumePeriod);
+
+    // Show the last 250 days of data (roughly 1 year of trading days)
+    // But ensure we have at least SMA 200 calculated
+    const minStartIndex = this.config.longMovingAverage - 1; // Index 199
+    const desiredChartLength = 250;
+    const chartStartIndex = Math.max(minStartIndex, closes.length - desiredChartLength);
+
+    // Ensure we have enough data
+    if (closes.length <= chartStartIndex) {
+      throw new Error(`Insufficient historical data for chart generation: have ${closes.length} points, need more than ${chartStartIndex}`);
+    }
+
+    // Each indicator array starts at a different position in the original data
+    // We need to align them all to start at chartStartIndex
+
+    // Helper function to align indicator arrays with the chart start
+    const alignArray = (indicatorArray: number[], indicatorStartsAtIndex: number): number[] => {
+      // How many data points into the full dataset does this indicator start?
+      // e.g., SMA 50 starts at index 49 (needs 50 points)
+      // e.g., SMA 200 starts at index 199 (needs 200 points)
+
+      if (indicatorStartsAtIndex < chartStartIndex) {
+        // Indicator has data before the chart starts
+        // We need to skip the early data
+        const skipCount = chartStartIndex - indicatorStartsAtIndex;
+        return indicatorArray.slice(skipCount);
+      } else if (indicatorStartsAtIndex === chartStartIndex) {
+        // Indicator starts exactly where chart starts
+        return indicatorArray;
+      } else {
+        // Indicator starts after chart (shouldn't happen with our setup)
+        const nullPadding = indicatorStartsAtIndex - chartStartIndex;
+        return [...Array(nullPadding).fill(null), ...indicatorArray];
+      }
+    };
+
+    // Calculate where each MACD component starts in the original dataset
+    // MACD line starts at index 25 (needs 26 points for slow EMA)
+    const macdLineStartIndex = this.config.macdSlow - 1;
+    // Signal line needs 9 more periods on top of MACD, so index 25 + 8 = 33
+    const macdSignalStartIndex = this.config.macdSlow + this.config.macdSignal - 2;
+    // Histogram starts same time as signal line
+    const macdHistogramStartIndex = macdSignalStartIndex;
+
+    const chartData = {
+      dates: dates.slice(chartStartIndex),
+      prices: closes.slice(chartStartIndex),
+      // SMA arrays already start at their period-1 index
+      sma_50_values: alignArray(sma50Array, this.config.shortMovingAverage - 1),
+      sma_200_values: alignArray(sma200Array, this.config.longMovingAverage - 1),
+      ema_20_values: alignArray(ema20Array, 19),
+      rsi_values: alignArray(rsiValues, this.config.rsiPeriod),
+      macd_values: alignArray(macdValues, macdLineStartIndex),
+      macd_signal_values: alignArray(macdSignalValues, macdSignalStartIndex),
+      macd_histogram_values: alignArray(macdHistogramValues, macdHistogramStartIndex),
+      bb_upper: alignArray(bbUpper, this.config.bollingerPeriod - 1),
+      bb_middle: alignArray(bbMiddle, this.config.bollingerPeriod - 1),
+      bb_lower: alignArray(bbLower, this.config.bollingerPeriod - 1),
+      volumes: volumes.slice(chartStartIndex),
+      volume_sma: alignArray(volumeSmaArray, this.config.volumePeriod - 1)
+    };
+
+    return chartData;
   }
 }

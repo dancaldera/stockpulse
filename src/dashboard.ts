@@ -4,6 +4,7 @@ export const dashboardHTML = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StockPulse - Stock Analysis Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -560,6 +561,148 @@ export const dashboardHTML = `<!DOCTYPE html>
             transform: translateX(-4px);
         }
 
+        .charts-section {
+            margin-top: 32px;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .chart-title {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-description {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .chart-canvas {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        .chart-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .chart-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-control-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .chart-select {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .chart-select:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+
+        .chart-select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        .chart-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .chart-checkbox:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .chart-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #6366f1;
+        }
+
+        .chart-checkbox label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .chart-checkbox input[type="checkbox"]:checked + label {
+            color: white;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.5rem;
@@ -572,6 +715,10 @@ export const dashboardHTML = `<!DOCTYPE html>
             .batch-grid, .scanner-grid {
                 grid-template-columns: 1fr;
             }
+
+            .chart-canvas {
+                height: 250px;
+            }
         }
     </style>
 </head>
@@ -583,39 +730,14 @@ export const dashboardHTML = `<!DOCTYPE html>
         </div>
 
         <div class="card">
-            <div class="tabs">
-                <button class="tab active" onclick="switchTab('single')">Single Stock</button>
-                <button class="tab" onclick="switchTab('batch')">Batch Analysis</button>
-                <button class="tab" onclick="switchTab('scanner')">Market Scanner</button>
+            <div class="input-section">
+                <input type="text" id="ticker-input" placeholder="Enter one or multiple tickers (e.g., AAPL or AAPL, MSFT, GOOGL)" onkeypress="handleKeyPress(event)">
+                <button onclick="analyzeStocks()">Search</button>
+                <button onclick="loadTopOpportunities()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                    🔄 Refresh
+                </button>
             </div>
-
-            <div id="single-tab">
-                <div class="input-section">
-                    <input type="text" id="ticker-input" placeholder="Enter ticker symbol (e.g., AAPL)" onkeypress="handleKeyPress(event, 'single')">
-                    <button onclick="analyzeSingle()">Analyze</button>
-                </div>
-            </div>
-
-            <div id="batch-tab" style="display: none;">
-                <div class="input-section">
-                    <input type="text" id="batch-input" placeholder="Enter tickers separated by commas (e.g., AAPL, MSFT, GOOGL)" onkeypress="handleKeyPress(event, 'batch')">
-                    <button onclick="analyzeBatch()">Analyze Batch</button>
-                </div>
-                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">Max 10 tickers per request</p>
-            </div>
-
-            <div id="scanner-tab" style="display: none;">
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <button onclick="loadScanner()" style="flex: 1;">🔄 Load Top Opportunities</button>
-                    <select id="scanner-limit" style="padding: 12px; border-radius: 8px; border: 2px solid #e0e0e0;">
-                        <option value="10">Top 10</option>
-                        <option value="20" selected>Top 20</option>
-                        <option value="30">Top 30</option>
-                        <option value="50">Top 50</option>
-                    </select>
-                </div>
-                <p style="color: #666; font-size: 0.9rem;">Click on any stock to view detailed analysis</p>
-            </div>
+            <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 12px;">Enter a single ticker for detailed analysis, or multiple tickers separated by commas for comparison</p>
         </div>
 
         <div id="results"></div>
@@ -624,35 +746,38 @@ export const dashboardHTML = `<!DOCTYPE html>
     <script>
         const API_BASE = window.location.origin;
         let currentDetailTicker = null;
+        let activeCharts = {};
 
-        function switchTab(tab) {
-            const tabs = document.querySelectorAll('.tab');
-            tabs.forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-
-            document.getElementById('single-tab').style.display = tab === 'single' ? 'block' : 'none';
-            document.getElementById('batch-tab').style.display = tab === 'batch' ? 'block' : 'none';
-            document.getElementById('scanner-tab').style.display = tab === 'scanner' ? 'block' : 'none';
-            document.getElementById('results').innerHTML = '';
-
-            if (tab === 'scanner') {
-                loadScanner();
-            }
-        }
-
-        function handleKeyPress(event, type) {
+        function handleKeyPress(event) {
             if (event.key === 'Enter') {
-                type === 'single' ? analyzeSingle() : analyzeBatch();
+                analyzeStocks();
             }
         }
 
-        async function analyzeSingle() {
-            const ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
-            if (!ticker) {
-                showError('Please enter a ticker symbol');
+        async function analyzeStocks() {
+            const input = document.getElementById('ticker-input').value.trim().toUpperCase();
+            if (!input) {
+                showError('Please enter one or more ticker symbols');
                 return;
             }
 
+            const tickers = input.split(',').map(t => t.trim()).filter(t => t);
+
+            if (tickers.length === 0) {
+                showError('Please enter valid ticker symbols');
+                return;
+            }
+
+            // If single ticker, show detailed analysis
+            if (tickers.length === 1) {
+                await analyzeSingle(tickers[0]);
+            } else {
+                // If multiple tickers, show scanner view
+                await analyzeMultiple(tickers);
+            }
+        }
+
+        async function analyzeSingle(ticker) {
             showLoading();
 
             try {
@@ -669,29 +794,16 @@ export const dashboardHTML = `<!DOCTYPE html>
             }
         }
 
-        async function analyzeBatch() {
-            const input = document.getElementById('batch-input').value.trim();
-            if (!input) {
-                showError('Please enter ticker symbols');
-                return;
-            }
-
-            const tickers = input.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
-
-            if (tickers.length === 0) {
-                showError('Please enter valid ticker symbols');
-                return;
-            }
-
-            if (tickers.length > 10) {
-                showError('Maximum 10 tickers allowed');
+        async function analyzeMultiple(tickers) {
+            if (tickers.length > 50) {
+                showError('Maximum 50 tickers allowed');
                 return;
             }
 
             showLoading();
 
             try {
-                const response = await fetch(\`\${API_BASE}/api/batch\`, {
+                const response = await fetch(\`\${API_BASE}/api/scanner\`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -701,7 +813,7 @@ export const dashboardHTML = `<!DOCTYPE html>
                 const data = await response.json();
 
                 if (data.success) {
-                    displayBatchResults(data.data);
+                    displayScannerResults(data.data, false);
                 } else {
                     showError(data.error || 'Failed to analyze stocks');
                 }
@@ -710,8 +822,7 @@ export const dashboardHTML = `<!DOCTYPE html>
             }
         }
 
-        async function loadScanner() {
-            const limit = document.getElementById('scanner-limit').value;
+        async function loadTopOpportunities(limit = 20) {
             showLoading();
 
             try {
@@ -719,30 +830,31 @@ export const dashboardHTML = `<!DOCTYPE html>
                 const data = await response.json();
 
                 if (data.success) {
-                    displayScannerResults(data.data);
+                    displayScannerResults(data.data, true);
                 } else {
-                    showError(data.error || 'Failed to load scanner');
+                    showError(data.error || 'Failed to load top opportunities');
                 }
             } catch (error) {
                 showError('Network error: ' + error.message);
             }
         }
 
+        // Load top opportunities on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadTopOpportunities(20);
+        });
+
         async function showStockDetail(ticker) {
             currentDetailTicker = ticker;
-            showLoading();
+            await analyzeSingle(ticker);
+        }
 
-            try {
-                const response = await fetch(\`\${API_BASE}/api/analyze/\${ticker}\`);
-                const data = await response.json();
-
-                if (data.success) {
-                    displaySingleResult(data.data, data.cached, true);
-                } else {
-                    showError(data.error || 'Failed to analyze stock');
-                }
-            } catch (error) {
-                showError('Network error: ' + error.message);
+        function goBack() {
+            const input = document.getElementById('ticker-input').value;
+            if (input) {
+                analyzeStocks();
+            } else {
+                document.getElementById('results').innerHTML = '';
             }
         }
 
@@ -763,12 +875,574 @@ export const dashboardHTML = `<!DOCTYPE html>
             \`;
         }
 
-        function displaySingleResult(stock, cached, showBackButton = false) {
+        function destroyActiveCharts() {
+            Object.values(activeCharts).forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                }
+            });
+            activeCharts = {};
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function renderBollingerBandsChart(chartData, currentPrice, ticker) {
+            const ctx = document.getElementById('bbChart');
+            if (!ctx) return;
+
+            const dates = chartData.dates.map(d => formatDate(d));
+
+            activeCharts.bb = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Price',
+                        data: chartData.prices,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: false
+                    }, {
+                        label: 'Upper Band',
+                        data: chartData.bb_upper,
+                        borderColor: 'rgba(239, 68, 68, 0.6)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: false
+                    }, {
+                        label: 'Middle Band (SMA 20)',
+                        data: chartData.bb_middle,
+                        borderColor: 'rgba(168, 85, 247, 0.8)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: false
+                    }, {
+                        label: 'Lower Band',
+                        data: chartData.bb_lower,
+                        borderColor: 'rgba(16, 185, 129, 0.6)',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: '+1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                        tension: 0.1,
+                        spanGaps: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderMovingAveragesChart(chartData) {
+            const ctx = document.getElementById('maChart');
+            if (!ctx) return;
+
+            const dates = chartData.dates.map(d => formatDate(d));
+
+            // Debug: Check SMA 200 data
+            console.log('SMA 200 data points:', chartData.sma_200_values.filter(v => v !== null).length);
+            console.log('SMA 200 sample:', chartData.sma_200_values.slice(-10));
+
+            activeCharts.ma = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Price',
+                        data: chartData.prices,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: false
+                    }, {
+                        label: 'SMA 50',
+                        data: chartData.sma_50_values,
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: true
+                    }, {
+                        label: 'SMA 200',
+                        data: chartData.sma_200_values,
+                        borderColor: '#ef4444',
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: false,
+                        segment: {
+                            borderColor: ctx => ctx.p0.parsed.y === null || ctx.p1.parsed.y === null ? 'transparent' : '#ef4444'
+                        }
+                    }, {
+                        label: 'EMA 20',
+                        data: chartData.ema_20_values,
+                        borderColor: '#10b981',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        spanGaps: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            padding: 12
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Custom plugin to draw RSI zones
+        const rsiZonesPlugin = {
+            id: 'rsiZones',
+            beforeDraw: (chart) => {
+                if (chart.canvas.id !== 'rsiChart') return;
+
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea;
+                const yScale = chart.scales.y;
+
+                // Overbought zone (70-100)
+                const y70 = yScale.getPixelForValue(70);
+                const yTop = yScale.getPixelForValue(100);
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+                ctx.fillRect(chartArea.left, yTop, chartArea.right - chartArea.left, y70 - yTop);
+
+                // Oversold zone (0-30)
+                const y30 = yScale.getPixelForValue(30);
+                const yBottom = yScale.getPixelForValue(0);
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+                ctx.fillRect(chartArea.left, y30, chartArea.right - chartArea.left, yBottom - y30);
+
+                // Draw reference lines
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, y70);
+                ctx.lineTo(chartArea.right, y70);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, y30);
+                ctx.lineTo(chartArea.right, y30);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw labels
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.font = '12px Inter, sans-serif';
+                ctx.fillText('Overbought (70)', chartArea.right - 120, y70 - 5);
+                ctx.fillText('Oversold (30)', chartArea.right - 110, y30 + 15);
+            }
+        };
+
+        // Register the plugin
+        if (typeof Chart !== 'undefined') {
+            Chart.register(rsiZonesPlugin);
+        }
+
+        function renderRSIChart(chartData) {
+            const ctx = document.getElementById('rsiChart');
+            if (!ctx) return;
+
+            const dates = chartData.dates.map(d => formatDate(d));
+
+            activeCharts.rsi = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'RSI',
+                        data: chartData.rsi_values,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            padding: 12
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderMACDChart(chartData) {
+            const ctx = document.getElementById('macdChart');
+            if (!ctx) return;
+
+            const dates = chartData.dates.map(d => formatDate(d));
+
+            activeCharts.macd = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'MACD Histogram',
+                        data: chartData.macd_histogram_values,
+                        backgroundColor: chartData.macd_histogram_values.map(v =>
+                            v === null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)')
+                        ),
+                        borderColor: chartData.macd_histogram_values.map(v =>
+                            v === null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 1)' : 'rgba(239, 68, 68, 1)')
+                        ),
+                        borderWidth: 1,
+                        type: 'bar'
+                    }, {
+                        label: 'MACD Line',
+                        data: chartData.macd_values,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        type: 'line',
+                        spanGaps: false
+                    }, {
+                        label: 'Signal Line',
+                        data: chartData.macd_signal_values,
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        type: 'line',
+                        spanGaps: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            padding: 12
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Global variable to store current chart data
+        let currentChartData = null;
+
+        function renderVolumeChart(chartData) {
+            const ctx = document.getElementById('volumeChart');
+            if (!ctx) return;
+
+            const dates = chartData.dates.map(d => formatDate(d));
+
+            activeCharts.volume = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Volume',
+                        data: chartData.volumes,
+                        backgroundColor: chartData.volumes.map((v, i) =>
+                            i > 0 && chartData.prices[i] > chartData.prices[i-1]
+                                ? 'rgba(16, 185, 129, 0.6)'
+                                : 'rgba(239, 68, 68, 0.6)'
+                        ),
+                        borderColor: chartData.volumes.map((v, i) =>
+                            i > 0 && chartData.prices[i] > chartData.prices[i-1]
+                                ? 'rgba(16, 185, 129, 1)'
+                                : 'rgba(239, 68, 68, 1)'
+                        ),
+                        borderWidth: 1
+                    }, {
+                        label: 'Average Volume',
+                        data: chartData.volume_sma,
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        type: 'line'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += new Intl.NumberFormat().format(context.parsed.y);
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                callback: function(value) {
+                                    return new Intl.NumberFormat('en-US', {
+                                        notation: 'compact',
+                                        compactDisplay: 'short'
+                                    }).format(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        function displaySingleResult(stock, cached) {
+            destroyActiveCharts();
+            currentChartData = stock.chartData;
             const recommendationClass = stock.recommendation.toLowerCase().replace(' ', '-');
 
-            const backButtonHTML = showBackButton ? \`
-                <button class="back-button" onclick="loadScanner()">
-                    ← Back to Scanner
+            // Show back button if there's input with multiple tickers
+            const input = document.getElementById('ticker-input').value;
+            const hasMultipleTickers = input && input.includes(',');
+
+            const backButtonHTML = hasMultipleTickers ? \`
+                <button class="back-button" onclick="goBack()">
+                    ← Back to Results
                 </button>
             \` : '';
 
@@ -827,6 +1501,70 @@ export const dashboardHTML = `<!DOCTYPE html>
                 </div>
             \` : '';
 
+            const chartsHTML = stock.chartData ? \`
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <div class="chart-title">📊 Bollinger Bands Analysis</div>
+                        <div class="chart-description">
+                            Bollinger Bands show price volatility and potential overbought/oversold conditions.
+                            When price touches the upper band, it may indicate overbought conditions.
+                            When it touches the lower band, it may indicate oversold conditions.
+                        </div>
+                        <div class="chart-canvas">
+                            <canvas id="bbChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📈 Price & Moving Averages</div>
+                        <div class="chart-description">
+                            Moving averages smooth out price data to identify trends.
+                            SMA 50 crossing above SMA 200 (Golden Cross) is bullish.
+                            SMA 50 crossing below SMA 200 (Death Cross) is bearish.
+                            Note: SMA 200 requires 200+ days of data to display fully.
+                        </div>
+                        <div class="chart-canvas">
+                            <canvas id="maChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">⚡ RSI (Relative Strength Index)</div>
+                        <div class="chart-description">
+                            RSI measures momentum and overbought/oversold conditions.
+                            Above 70 indicates overbought (potential sell signal).
+                            Below 30 indicates oversold (potential buy signal).
+                        </div>
+                        <div class="chart-canvas">
+                            <canvas id="rsiChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">🎯 MACD (Moving Average Convergence Divergence)</div>
+                        <div class="chart-description">
+                            MACD shows the relationship between two moving averages.
+                            When MACD line crosses above signal line, it's a bullish signal.
+                            When it crosses below, it's bearish. Histogram shows momentum strength.
+                        </div>
+                        <div class="chart-canvas">
+                            <canvas id="macdChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📊 Volume Analysis</div>
+                        <div class="chart-description">
+                            Volume shows trading activity. Green bars indicate days when price increased,
+                            red bars show price decreases. Higher volume during price movements confirms the trend strength.
+                        </div>
+                        <div class="chart-canvas">
+                            <canvas id="volumeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            \` : '';
+
             document.getElementById('results').innerHTML = \`
                 <div class="card stock-result">
                     \${backButtonHTML}
@@ -847,12 +1585,25 @@ export const dashboardHTML = `<!DOCTYPE html>
 
                     \${technicalHTML}
 
+                    \${chartsHTML}
+
                     <div class="timestamp">
                         \${cached ? '📦 Cached result • ' : ''}
                         \${new Date(stock.timestamp).toLocaleString()}
                     </div>
                 </div>
             \`;
+
+            // Render charts after DOM is updated
+            if (stock.chartData) {
+                setTimeout(() => {
+                    renderBollingerBandsChart(stock.chartData, stock.price, stock.ticker);
+                    renderMovingAveragesChart(stock.chartData);
+                    renderRSIChart(stock.chartData);
+                    renderMACDChart(stock.chartData);
+                    renderVolumeChart(stock.chartData);
+                }, 100);
+            }
         }
 
         function displayBatchResults(stocks) {
@@ -902,7 +1653,7 @@ export const dashboardHTML = `<!DOCTYPE html>
             \`;
         }
 
-        function displayScannerResults(stocks) {
+        function displayScannerResults(stocks, isTopOpportunities = false) {
             const stocksHTML = stocks.map(stock => {
                 const recommendationClass = stock.recommendation.toLowerCase().replace(' ', '-');
                 return \`
@@ -930,9 +1681,13 @@ export const dashboardHTML = `<!DOCTYPE html>
                 \`;
             }).join('');
 
+            const title = isTopOpportunities
+                ? '🔥 Top Investment Opportunities (Sorted by Potential Gain)'
+                : \`📊 Analysis Results (\${stocks.length} stocks)\`;
+
             document.getElementById('results').innerHTML = \`
                 <div class="card">
-                    <h2 style="margin-bottom: 20px; color: white; font-weight: 700;">Top Investment Opportunities (Sorted by Potential Gain)</h2>
+                    <h2 style="margin-bottom: 20px; color: white; font-weight: 700;">\${title}</h2>
                     <div class="scanner-grid">
                         \${stocksHTML}
                     </div>
