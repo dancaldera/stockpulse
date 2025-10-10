@@ -1696,4 +1696,4 @@ export const dashboardHTML = `<!DOCTYPE html>
         }
     </script>
 </body>
-</html>`;
+</html>`
