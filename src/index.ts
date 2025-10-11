@@ -210,37 +210,14 @@ app.get('/api/scanner', rateLimit, async (c) => {
     // Get strategy from query params or environment
     const strategy = (c.req.query('strategy') || c.env.TICKER_STRATEGY || 'most_active') as any
 
-    // Initialize ticker cache manager
-    const tickerCacheManager = c.env.TICKER_CACHE
-      ? new CacheManager(c.env.TICKER_CACHE, 1800) // Cache for 30 minutes
-      : null
+    // Fetch tickers based on strategy
+    const tickerFetcher = new TickerFetcher({
+      fmpApiKey: c.env.FMP_API_KEY,
+      strategy,
+      limit,
+    })
 
-    // Check ticker cache
-    const cacheKey = `tickers:${strategy}:${limit}`
-    let tickers: string[] = []
-
-    if (tickerCacheManager) {
-      const cachedTickers = await tickerCacheManager.get(cacheKey)
-      if (cachedTickers && Array.isArray(cachedTickers)) {
-        tickers = cachedTickers
-      }
-    }
-
-    // Fetch tickers if not cached
-    if (tickers.length === 0) {
-      const tickerFetcher = new TickerFetcher({
-        fmpApiKey: c.env.FMP_API_KEY,
-        strategy,
-        limit,
-      })
-
-      tickers = await tickerFetcher.fetchTickers()
-
-      // Cache the result
-      if (tickerCacheManager) {
-        await tickerCacheManager.set(cacheKey, tickers)
-      }
-    }
+    const tickers = await tickerFetcher.fetchTickers()
 
     const results = await Promise.allSettled(tickers.map((ticker) => analyzer.analyze(ticker)))
 

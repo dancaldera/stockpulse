@@ -18,13 +18,6 @@ binding = "STOCK_CACHE"
 id = "9925258550724f37bf163ad2a1f6569f"
 preview_id = "8665e2b2fad449f89f3bd8d986e11892"
 
-# KV namespace for ticker list caching (optional but recommended)
-# Create with: npx wrangler kv:namespace create "TICKER_CACHE"
-[[kv_namespaces]]
-binding = "TICKER_CACHE"
-id = "add_your_ticker_cache_id_here"
-preview_id = "add_your_ticker_cache_preview_id_here"
-
 # Rate limiting with Durable Objects
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"

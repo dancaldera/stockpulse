@@ -175,6 +175,35 @@ export const dashboardHTML = `<!DOCTYPE html>
             box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
         }
 
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px !important;
+        }
+
+        select:hover {
+            background-color: rgba(99, 102, 241, 0.3);
+            border-color: rgba(99, 102, 241, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        select:focus {
+            outline: none;
+            border-color: rgba(99, 102, 241, 0.8);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        select option {
+            background: #1a1a2e;
+            color: white;
+            padding: 10px;
+        }
+
         button:active {
             transform: translateY(0);
         }
@@ -733,11 +762,49 @@ export const dashboardHTML = `<!DOCTYPE html>
             <div class="input-section">
                 <input type="text" id="ticker-input" placeholder="Enter one or multiple tickers (e.g., AAPL or AAPL, MSFT, GOOGL)" onkeypress="handleKeyPress(event)">
                 <button onclick="analyzeStocks()">Search</button>
-                <button onclick="loadTopOpportunities()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                    🔄 Refresh
-                </button>
             </div>
             <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 12px;">Enter a single ticker for detailed analysis, or multiple tickers separated by commas for comparison</p>
+
+            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <label style="color: rgba(255, 255, 255, 0.8); font-weight: 600; font-size: 0.95rem;">
+                        Market Scanner:
+                    </label>
+                    <select id="strategy-selector" onchange="loadTopOpportunities()" style="
+                        background: rgba(99, 102, 241, 0.2);
+                        border: 1px solid rgba(99, 102, 241, 0.4);
+                        color: white;
+                        padding: 10px 16px;
+                        border-radius: 12px;
+                        font-size: 0.95rem;
+                        cursor: pointer;
+                        outline: none;
+                        transition: all 0.3s ease;
+                        font-weight: 500;
+                    ">
+                        <option value="most_active">🔥 Most Active</option>
+                        <option value="gainers">📈 Top Gainers</option>
+                        <option value="losers">📉 Top Losers</option>
+                        <option value="mixed">🎯 Mixed (Active + Gainers)</option>
+                        <option value="static">⭐ Popular Stocks</option>
+                    </select>
+                    <button onclick="loadTopOpportunities()" style="
+                        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                        border: none;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 12px;
+                        font-size: 0.95rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                    ">
+                        🔄 Refresh
+                    </button>
+                    <span id="strategy-info" style="color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; margin-left: auto;"></span>
+                </div>
+            </div>
         </div>
 
         <div id="results"></div>
@@ -826,16 +893,32 @@ export const dashboardHTML = `<!DOCTYPE html>
             showLoading();
 
             try {
-                const response = await fetch(\`\${API_BASE}/api/scanner?limit=\${limit}\`);
+                const strategy = document.getElementById('strategy-selector')?.value || 'most_active';
+                const response = await fetch(\`\${API_BASE}/api/scanner?limit=\${limit}&strategy=\${strategy}\`);
                 const data = await response.json();
 
                 if (data.success) {
                     displayScannerResults(data.data, true);
+                    updateStrategyInfo(data.strategy, data.total);
                 } else {
                     showError(data.error || 'Failed to load top opportunities');
                 }
             } catch (error) {
                 showError('Network error: ' + error.message);
+            }
+        }
+
+        function updateStrategyInfo(strategy, total) {
+            const infoElement = document.getElementById('strategy-info');
+            if (infoElement) {
+                const strategyNames = {
+                    'most_active': 'Most Active Stocks',
+                    'gainers': 'Top Gainers Today',
+                    'losers': 'Top Losers Today',
+                    'mixed': 'Mixed Strategy',
+                    'static': 'Popular Stocks'
+                };
+                infoElement.textContent = \`Showing \${total} \${strategyNames[strategy] || strategy}\`;
             }
         }
 

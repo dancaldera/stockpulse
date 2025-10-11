@@ -60,7 +60,6 @@ export interface StockMetrics {
 
 export type Bindings = {
   STOCK_CACHE?: KVNamespace
-  TICKER_CACHE?: KVNamespace
   RATE_LIMITER?: DurableObjectNamespace
   ENVIRONMENT?: string
   FMP_API_KEY?: string
