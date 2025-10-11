@@ -1,12 +1,13 @@
-import type { DurableObject } from 'cloudflare:workers'
+import { DurableObject } from 'cloudflare:workers'
 
-export class RateLimiter implements DurableObject {
+export class RateLimiter extends DurableObject {
   private counters: number[] = []
 
   constructor(
-    private state: DurableObjectState,
-    private env: any,
+    state: DurableObjectState,
+    public env: any,
   ) {
+    super(state, env)
     // Initialize state if needed
   }
 
