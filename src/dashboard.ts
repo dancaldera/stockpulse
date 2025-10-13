@@ -15,25 +15,10 @@ export const dashboardHTML = `<!DOCTYPE html>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #0f0f1e;
-            background-image:
-                radial-gradient(at 30% 40%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-                radial-gradient(at 70% 60%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
             min-height: 100vh;
             padding: 20px;
             position: relative;
             overflow-x: hidden;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(99,102,241,0.05)" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
-            pointer-events: none;
-            z-index: 0;
         }
 
         .container {
