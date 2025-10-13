@@ -123,10 +123,8 @@ export class StockValidator {
       errors.push(`Ticker cannot exceed ${defaultOptions.maxLength} characters`)
     }
 
-    // Check for valid characters only
-    const allowedRegex = new RegExp(
-      `^[${defaultOptions.allowedSymbols?.join('') || 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.'}]+$`,
-    )
+    // Check for valid characters only (dash must be escaped in character class)
+    const allowedRegex = /^[A-Z0-9.\-]+$/
     if (!allowedRegex.test(sanitized)) {
       errors.push('Ticker contains invalid characters')
     }

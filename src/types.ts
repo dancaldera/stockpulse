@@ -63,7 +63,7 @@ export type Bindings = {
   RATE_LIMITER?: DurableObjectNamespace
   ENVIRONMENT?: string
   FMP_API_KEY?: string
-  TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
+  TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static' | 'crypto'
 }
 
 export interface ValidationOptions {

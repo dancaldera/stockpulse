@@ -5,7 +5,7 @@
 
 export interface TickerFetcherConfig {
   fmpApiKey?: string
-  strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
+  strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static' | 'crypto'
   minVolume?: number
   minPrice?: number
   maxPrice?: number
@@ -48,6 +48,8 @@ export class TickerFetcher {
           return await this.fetchLosers()
         case 'mixed':
           return await this.fetchMixed()
+        case 'crypto':
+          return await this.fetchCrypto()
         case 'static':
         default:
           return this.fetchStatic()
@@ -152,6 +154,54 @@ export class TickerFetcher {
     } catch (error) {
       console.error('Mixed fetch failed:', error)
       return this.fetchStatic()
+    }
+  }
+
+  /**
+   * Fetch top cryptocurrencies
+   * Uses CoinGecko API (free, no key required) with Yahoo Finance ticker format
+   */
+  private async fetchCrypto(): Promise<string[]> {
+    try {
+      // Fetch top cryptocurrencies by market cap from CoinGecko (free API)
+      const url =
+        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1'
+
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`CoinGecko API error: ${response.status}`)
+      }
+
+      const data = (await response.json()) as any[]
+
+      // Map CoinGecko symbols to Yahoo Finance format (SYMBOL-USD)
+      // Filter out stablecoins if desired
+      const cryptoTickers = data
+        .filter((coin) => {
+          // Optional: Filter out stablecoins
+          const isStablecoin = ['usdt', 'usdc', 'dai', 'busd', 'tusd'].includes(coin.id.toLowerCase())
+          return !isStablecoin && coin.current_price > 0
+        })
+        .map((coin) => {
+          // Convert CoinGecko symbol to Yahoo Finance format
+          // CoinGecko: btc -> Yahoo: BTC-USD
+          return `${coin.symbol.toUpperCase()}-USD`
+        })
+        .slice(0, this.config.limit)
+
+      if (cryptoTickers.length > 0) {
+        return cryptoTickers
+      }
+
+      throw new Error('No crypto tickers found from CoinGecko')
+    } catch (error) {
+      console.error('CoinGecko fetch failed, using static crypto list:', error)
+      return this.fetchStaticCrypto()
     }
   }
 
@@ -303,5 +353,33 @@ export class TickerFetcher {
     ]
 
     return POPULAR_TICKERS.slice(0, this.config.limit || 50)
+  }
+
+  /**
+   * Fallback to static crypto tickers
+   */
+  private fetchStaticCrypto(): string[] {
+    const CRYPTO_TICKERS = [
+      'BTC-USD',
+      'ETH-USD',
+      'BNB-USD',
+      'SOL-USD',
+      'XRP-USD',
+      'ADA-USD',
+      'DOGE-USD',
+      'AVAX-USD',
+      'DOT-USD',
+      'MATIC-USD',
+      'LINK-USD',
+      'UNI-USD',
+      'LTC-USD',
+      'ATOM-USD',
+      'XLM-USD',
+      'ALGO-USD',
+      'SHIB-USD',
+      'TRX-USD',
+    ]
+
+    return CRYPTO_TICKERS.slice(0, this.config.limit || 20)
   }
 }

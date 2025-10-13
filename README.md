@@ -1,15 +1,18 @@
-# StockPulse 📈
+# StockPulse 📈₿
 
-A high-performance **Cloudflare Workers** stock analysis API that provides real-time technical analysis and trading signals using Yahoo Finance data. Built with edge computing for ultra-fast global responses.
+A high-performance **Cloudflare Workers** stock and cryptocurrency analysis API that provides real-time technical analysis and trading signals using Yahoo Finance data. Built with edge computing for ultra-fast global responses.
+
+**NEW**: Now supports cryptocurrency analysis! Analyze Bitcoin, Ethereum, and 20+ other cryptos using the same powerful technical indicators.
 
 ---
 
 ## 🚀 Features
 
+✅ **Cryptocurrency Support** - Full support for BTC, ETH, XRP, and 20+ cryptos
 ✅ **Global Edge Deployment** - Runs on Cloudflare's 300+ data centers worldwide
 ✅ **Sub-50ms Response Times** - Leverages edge computing for instant analysis
-✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, or losers
-✅ **Multi-API Support** - FMP API with Yahoo Finance fallback
+✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, losers, or top cryptos
+✅ **Multi-API Support** - FMP API, CoinGecko, and Yahoo Finance with fallbacks
 ✅ **Comprehensive Analysis** - 12+ technical indicators + fundamentals
 ✅ **Smart Caching** - 5-minute cache for analysis + 30-minute cache for ticker lists
 ✅ **Auto-scaling** - Handles millions of requests seamlessly
@@ -195,16 +198,23 @@ curl http://localhost:8787/api/health
 
 ---
 
-### 3. Analyze Single Stock
+### 3. Analyze Single Stock or Crypto
 ```bash
 GET /api/analyze/:ticker
 ```
 
-Provides comprehensive analysis for a single ticker symbol.
+Provides comprehensive analysis for a single ticker symbol (stocks or crypto).
 
-**Example:**
+**Examples:**
 ```bash
+# Analyze a stock
 curl http://localhost:8787/api/analyze/AAPL
+
+# Analyze Bitcoin
+curl http://localhost:8787/api/analyze/BTC-USD
+
+# Analyze Ethereum
+curl http://localhost:8787/api/analyze/ETH-USD
 ```
 
 **Response:**
@@ -270,15 +280,19 @@ Automatically scan the market based on real-time activity. Returns top opportuni
   - `gainers`: Top performing stocks today
   - `losers`: Worst performing stocks today
   - `mixed`: Combination of actives and gainers
+  - `crypto`: Top cryptocurrencies by market cap (NEW!)
   - `static`: Predefined popular ticker list
 
-**Example:**
+**Examples:**
 ```bash
 # Get top 10 most active stocks
 curl "http://localhost:8787/api/scanner?limit=10&strategy=most_active"
 
 # Get top 25 gainers
 curl "http://localhost:8787/api/scanner?limit=25&strategy=gainers"
+
+# Get top 20 cryptocurrencies
+curl "http://localhost:8787/api/scanner?limit=20&strategy=crypto"
 ```
 
 **Response:**
@@ -309,14 +323,18 @@ curl "http://localhost:8787/api/scanner?limit=25&strategy=gainers"
 ```
 
 **How it works:**
-1. Fetches real-time market movers from Financial Modeling Prep API
-2. Falls back to Yahoo Finance trending stocks if FMP unavailable
-3. Falls back to static list if all APIs fail
-4. Caches ticker lists for 30 minutes to avoid rate limits
-5. Filters stocks: minimum $5 price, 1M+ daily volume
-6. Analyzes each ticker and sorts by potential gain
+1. Fetches real-time market movers from Financial Modeling Prep API (stocks)
+2. Or fetches top cryptos from CoinGecko API (crypto strategy)
+3. Falls back to Yahoo Finance trending stocks if FMP unavailable
+4. Falls back to static list if all APIs fail
+5. Caches ticker lists for 30 minutes to avoid rate limits
+6. Filters stocks: minimum $5 price, 1M+ daily volume
+7. Filters crypto: excludes stablecoins, requires positive price
+8. Analyzes each ticker and sorts by potential gain
 
-**Note:** Without an FMP API key, the system uses Yahoo Finance trending stocks or the static ticker list. For true real-time market movers (most active, gainers, losers), an FMP API key is recommended (free tier available).
+**Note:**
+- For stocks: Without an FMP API key, the system uses Yahoo Finance trending stocks or the static ticker list. For true real-time market movers (most active, gainers, losers), an FMP API key is recommended (free tier available).
+- For crypto: Uses CoinGecko's free API (no key required, 30 calls/min) to fetch top cryptocurrencies by market cap.
 
 ---
 
@@ -326,20 +344,31 @@ POST /api/batch
 Content-Type: application/json
 ```
 
-Analyze multiple stocks in a single request (max 10 tickers).
+Analyze multiple stocks and/or cryptos in a single request (max 10 tickers).
 
 **Request Body:**
 ```json
 {
-  "tickers": ["AAPL", "MSFT", "GOOGL", "TSLA"]
+  "tickers": ["AAPL", "MSFT", "BTC-USD", "ETH-USD"]
 }
 ```
 
-**Example:**
+**Examples:**
 ```bash
+# Analyze stocks
 curl -X POST http://localhost:8787/api/batch \
   -H "Content-Type: application/json" \
   -d '{"tickers": ["AAPL", "MSFT", "GOOGL"]}'
+
+# Analyze cryptocurrencies
+curl -X POST http://localhost:8787/api/batch \
+  -H "Content-Type: application/json" \
+  -d '{"tickers": ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"]}'
+
+# Mix stocks and crypto
+curl -X POST http://localhost:8787/api/batch \
+  -H "Content-Type: application/json" \
+  -d '{"tickers": ["AAPL", "BTC-USD", "TSLA", "ETH-USD"]}'
 ```
 
 **Response:**

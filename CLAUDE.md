@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**StockPulse** is a Cloudflare Workers-based stock analysis API that provides real-time technical analysis and trading signals using Yahoo Finance data. It's built for edge computing with ultra-fast global responses.
+**StockPulse** is a Cloudflare Workers-based stock and cryptocurrency analysis API that provides real-time technical analysis and trading signals using Yahoo Finance data. It's built for edge computing with ultra-fast global responses.
+
+**Crypto Support**: Fully supports cryptocurrency analysis (BTC-USD, ETH-USD, etc.) using the same technical indicators as stocks. Yahoo Finance natively supports crypto tickers with identical data structures.
 
 ## Development Commands
 
@@ -130,6 +132,44 @@ All indicators are implemented from scratch:
 - **Structure**: Stores `{ data, timestamp }` with manual TTL checking
 - **Graceful Degradation**: Functions without KV if not configured
 
+### Cryptocurrency Support
+
+#### How Crypto Works
+Yahoo Finance treats cryptocurrency tickers identically to stocks:
+- **Format**: `{SYMBOL}-USD` (e.g., `BTC-USD`, `ETH-USD`, `XRP-USD`)
+- **Data**: Same OHLCV (Open, High, Low, Close, Volume) structure
+- **Indicators**: All technical indicators (RSI, MACD, SMA, Bollinger Bands) work identically
+- **Analysis**: Same scoring algorithm and recommendation system
+
+#### Crypto Ticker Fetching Strategy
+When using `strategy=crypto` in the scanner:
+1. **Primary**: CoinGecko API (free, no key required, 30 calls/min)
+   - Fetches top 50 cryptos by market cap
+   - Maps to Yahoo Finance format (e.g., `btc` → `BTC-USD`)
+   - Filters out stablecoins (USDT, USDC, DAI, BUSD, TUSD)
+2. **Fallback**: Static crypto list with top 20 cryptocurrencies
+
+#### Static Crypto Tickers (src/tickers.ts)
+Pre-defined list of 20 major cryptocurrencies:
+- Major: BTC-USD, ETH-USD, BNB-USD, SOL-USD, XRP-USD
+- DeFi: UNI-USD, LINK-USD, AAVE-USD, AVAX-USD
+- Memecoins: DOGE-USD, SHIB-USD
+- Layer 1: ADA-USD, DOT-USD, ATOM-USD, ALGO-USD
+
+#### Testing Crypto Analysis
+```bash
+# Test single crypto
+curl http://localhost:8787/api/analyze/BTC-USD
+
+# Test crypto scanner
+curl "http://localhost:8787/api/scanner?limit=10&strategy=crypto"
+
+# Test batch crypto analysis
+curl -X POST http://localhost:8787/api/batch \
+  -H "Content-Type: application/json" \
+  -d '{"tickers": ["BTC-USD", "ETH-USD", "SOL-USD"]}'
+```
+
 ### Configuration
 
 #### Analysis Configuration (src/analyzer.ts)
@@ -160,17 +200,17 @@ To modify: Pass partial config to `StockAnalyzer` constructor or use `updateConf
 #### Environment Variables (wrangler.toml)
 ```toml
 ENVIRONMENT = "production"
-TICKER_STRATEGY = "most_active"  # Options: most_active, gainers, losers, mixed, static
+TICKER_STRATEGY = "most_active"  # Options: most_active, gainers, losers, mixed, crypto, static
 ```
 
 ### API Endpoints
 
-1. **GET /** - Dashboard with interactive UI
+1. **GET /** - Dashboard with interactive UI (supports crypto)
 2. **GET /api/health** - Health check endpoint
-3. **GET /api/analyze/:ticker** - Analyze single stock with full metrics + chart data
-4. **POST /api/batch** - Analyze up to 10 tickers (returns summary only)
-5. **GET /api/scanner?limit=20&strategy=most_active** - Market scanner with dynamic tickers
-6. **POST /api/scanner** - Scanner with custom ticker list (up to 50 tickers)
+3. **GET /api/analyze/:ticker** - Analyze single stock or crypto (e.g., AAPL or BTC-USD)
+4. **POST /api/batch** - Analyze up to 10 tickers (stocks, crypto, or mixed)
+5. **GET /api/scanner?limit=20&strategy=most_active** - Market scanner (strategies: most_active, gainers, losers, mixed, crypto, static)
+6. **POST /api/scanner** - Scanner with custom ticker list (up to 50 tickers, stocks and crypto)
 
 ### Data Flow Example
 
