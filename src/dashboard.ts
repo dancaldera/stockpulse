@@ -16,9 +16,8 @@ export const dashboardHTML = `<!DOCTYPE html>
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #0f0f1e;
             background-image:
-                radial-gradient(at 20% 30%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-                radial-gradient(at 80% 70%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
-                radial-gradient(at 50% 50%, rgba(34, 211, 238, 0.1) 0px, transparent 50%);
+                radial-gradient(at 30% 40%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                radial-gradient(at 70% 60%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
             min-height: 100vh;
             padding: 20px;
             position: relative;
