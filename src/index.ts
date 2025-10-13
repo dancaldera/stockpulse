@@ -212,7 +212,6 @@ app.get('/api/scanner', rateLimit, async (c) => {
 
     // Fetch tickers based on strategy
     const tickerFetcher = new TickerFetcher({
-      fmpApiKey: c.env.FMP_API_KEY,
       strategy,
       limit,
     })

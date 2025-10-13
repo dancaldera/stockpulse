@@ -5,11 +5,9 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
-# Ticker selection strategy: most_active, gainers, losers, mixed, or static
+# Ticker selection strategy: most_active, gainers, losers, mixed, crypto, or static
+# All strategies use free Yahoo Finance + CoinGecko APIs (no API keys required)
 TICKER_STRATEGY = "most_active"
-
-# Secrets (set with: npx wrangler secret put FMP_API_KEY)
-# FMP_API_KEY = "your_key_here" - DO NOT commit this! Use wrangler secret put
 
 # KV namespace for stock data caching (optional but recommended)
 # Create with: npx wrangler kv:namespace create "STOCK_CACHE"

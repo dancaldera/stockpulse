@@ -13,39 +13,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Essential Commands
 ```bash
 # Local development server
-npm run dev
+bun run dev
 
 # Deploy to Cloudflare Workers
-npm run deploy
+bun run deploy
 
 # View live production logs
-npm run tail
+bun run tail
 
 # Run tests
-npm test
-npm run test:watch
-npm run test:coverage
+bun test
+bun run test:watch
+bun run test:coverage
 
 # Format code with Biome
-npm run lint
+bun run lint
 ```
 
 ### Cloudflare KV Setup (Optional)
 ```bash
 # Create KV namespace for caching
-npx wrangler kv namespace create "STOCK_CACHE"
-npx wrangler kv namespace create "STOCK_CACHE" --preview
+bunx wrangler kv namespace create "STOCK_CACHE"
+bunx wrangler kv namespace create "STOCK_CACHE" --preview
 
 # Update IDs in wrangler.toml after creation
-```
-
-### Environment Setup
-```bash
-# Set FMP API key as secret (recommended)
-npx wrangler secret put FMP_API_KEY
-
-# Or for local dev, create .dev.vars (never commit)
-echo "FMP_API_KEY=your_key_here" > .dev.vars
 ```
 
 ## Code Architecture
@@ -55,7 +46,7 @@ echo "FMP_API_KEY=your_key_here" > .dev.vars
 2. **Rate Limiting** (src/rateLimiter.ts) - Durable Object-based rate limiter
 3. **Stock Analyzer** (src/analyzer.ts) - Core technical analysis engine
 4. **Yahoo Finance Client** (src/yahooFinance.ts) - Custom API client for Workers
-5. **Ticker Fetcher** (src/tickerFetcher.ts) - Dynamic market scanner with FMP + Yahoo fallback
+5. **Ticker Fetcher** (src/tickerFetcher.ts) - Dynamic market scanner using Yahoo Finance + CoinGecko
 6. **Caching Layer** (src/utils.ts) - KV-based caching with TTL
 
 ### Core Components
@@ -99,13 +90,15 @@ Custom implementation to avoid Node.js dependencies. Uses:
 **Important**: Yahoo Finance only returns trading days (Mon-Fri excluding holidays). Request ~1.5x the needed trading days to account for weekends/holidays.
 
 #### Ticker Fetcher (src/tickerFetcher.ts)
-Multi-API strategy with intelligent fallback:
-1. **Primary**: Financial Modeling Prep (FMP) API for real-time market movers
-   - `/api/v3/stock_market/actives` - Most active stocks
-   - `/api/v3/stock_market/gainers` - Top gainers
-   - `/api/v3/stock_market/losers` - Worst performers
-2. **Fallback**: Yahoo Finance trending API
-3. **Final Fallback**: Static curated list of liquid stocks
+Multi-source strategy with intelligent fallback (100% free APIs):
+1. **For stocks**: Yahoo Finance trending and screener APIs
+   - Trending endpoint for most active stocks
+   - Screener API for gainers/losers
+   - No API key required
+2. **For crypto**: CoinGecko API (free, no key required)
+   - Top cryptocurrencies by market cap
+   - Filters out stablecoins
+3. **Final Fallback**: Static curated lists of popular tickers
 
 **Filtering**: Excludes penny stocks (< $5) and low volume (< 1M daily volume).
 
@@ -269,7 +262,7 @@ The `alignArray()` helper in analyzer.ts ensures all indicators align correctly 
 - **Line width**: 120 for JS/TS, 100 for JSON
 - **Indent**: 2 spaces
 
-Run `npm run lint` to format. Biome linter is disabled.
+Run `bun run lint` to format. Biome linter is disabled.
 
 ## Common Development Tasks
 
@@ -288,16 +281,14 @@ Edit `calculateScore()` in src/analyzer.ts. Each indicator contributes weighted 
 - Reasons array for explainability
 
 ### Testing Locally
-1. `npm run dev` starts local server on http://localhost:8787
+1. `bun run dev` starts local server on http://localhost:8787
 2. Test endpoint: `curl http://localhost:8787/api/analyze/AAPL`
-3. Use `.dev.vars` for local secrets (not committed)
-4. KV preview namespace used automatically in dev mode
+3. KV preview namespace used automatically in dev mode
 
 ### Deployment
-1. `npm run deploy` pushes to Cloudflare Workers
+1. `bun run deploy` pushes to Cloudflare Workers
 2. Uses production KV namespaces (not preview)
-3. Secrets must be set via `npx wrangler secret put SECRET_NAME`
-4. Check logs: `npm run tail`
+3. Check logs: `bun run tail`
 
 ## TypeScript Configuration
 
@@ -328,6 +319,3 @@ Durable Objects may persist state between restarts. Clear by restarting dev serv
 
 ### Cache not working
 Verify KV namespace is bound in wrangler.toml and namespace exists in Cloudflare dashboard.
-
-### FMP API not working
-Check API key with `npx wrangler secret list`. Verify key is valid at financialmodelingprep.com. System falls back to Yahoo Finance if FMP fails.

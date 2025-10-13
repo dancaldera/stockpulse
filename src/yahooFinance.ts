@@ -24,8 +24,91 @@ export interface QuoteData {
   debtToEquity?: number
 }
 
+export interface TrendingTicker {
+  symbol: string
+  name?: string
+}
+
 export class YahooFinance {
   private static readonly BASE_URL = 'https://query2.finance.yahoo.com'
+  private static readonly BASE_URL_ALT = 'https://query1.finance.yahoo.com'
+
+  /**
+   * Fetch trending tickers from Yahoo Finance
+   * Returns list of currently trending stock symbols
+   */
+  static async trending(count: number = 50): Promise<string[]> {
+    try {
+      const url = `${this.BASE_URL_ALT}/v1/finance/trending/US?count=${count}`
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch trending tickers: ${response.statusText}`)
+      }
+
+      const data = (await response.json()) as any
+
+      if (data?.finance?.result?.[0]?.quotes) {
+        return data.finance.result[0].quotes
+          .map((quote: any) => quote.symbol)
+          .filter((symbol: string) => symbol && !symbol.includes('^') && !symbol.includes('='))
+          .slice(0, count)
+      }
+
+      return []
+    } catch (error) {
+      console.error('Yahoo Finance trending fetch failed:', error)
+      return []
+    }
+  }
+
+  /**
+   * Fetch market movers from Yahoo Finance screener
+   * @param type - 'gainers' or 'losers'
+   * @param count - Number of results to return
+   */
+  static async screener(type: 'gainers' | 'losers', count: number = 50): Promise<string[]> {
+    try {
+      // Yahoo Finance screener endpoint
+      const endpoint = type === 'gainers' ? 'day_gainers' : 'day_losers'
+      const url = `${this.BASE_URL_ALT}/v1/finance/screener/predefined/saved?scrIds=${endpoint}&count=${count}`
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${type}: ${response.statusText}`)
+      }
+
+      const data = (await response.json()) as any
+
+      if (data?.finance?.result?.[0]?.quotes) {
+        return data.finance.result[0].quotes
+          .map((quote: any) => quote.symbol)
+          .filter((symbol: string) => symbol && !symbol.includes('^') && !symbol.includes('='))
+          .slice(0, count)
+      }
+
+      return []
+    } catch (error) {
+      console.error(`Yahoo Finance ${type} fetch failed:`, error)
+      return []
+    }
+  }
 
   /**
    * Fetch historical data for a ticker

@@ -1,10 +1,12 @@
 /**
  * Dynamic ticker fetcher service
- * Fetches top tickers based on market activity (most active, gainers, losers)
+ * Fetches top tickers using Yahoo Finance and CoinGecko APIs (100% free, no API keys required)
  */
 
+import { YahooFinance } from './yahooFinance'
+import { POPULAR_TICKERS, CRYPTO_TICKERS } from './tickers'
+
 export interface TickerFetcherConfig {
-  fmpApiKey?: string
   strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static' | 'crypto'
   minVolume?: number
   minPrice?: number
@@ -61,95 +63,71 @@ export class TickerFetcher {
   }
 
   /**
-   * Fetch most active stocks from FMP API
+   * Fetch most active stocks from Yahoo Finance trending API
    */
   private async fetchMostActive(): Promise<string[]> {
-    if (!this.config.fmpApiKey) {
-      console.warn('FMP API key not provided, using Yahoo Finance fallback')
-      return this.fetchYahooMostActive()
-    }
-
     try {
-      const url = `https://financialmodelingprep.com/api/v3/stock_market/actives?apikey=${this.config.fmpApiKey}`
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      })
+      const tickers = await YahooFinance.trending(this.config.limit || 50)
 
-      if (!response.ok) {
-        throw new Error(`FMP API error: ${response.status}`)
+      if (tickers.length > 0) {
+        return tickers.slice(0, this.config.limit)
       }
 
-      const data = (await response.json()) as any[]
-      return this.filterAndExtractTickers(data)
+      throw new Error('No trending tickers found')
     } catch (error) {
-      console.error('FMP most active fetch failed, using fallback:', error)
-      return this.fetchYahooMostActive()
+      console.error('Yahoo Finance trending fetch failed, using static list:', error)
+      return this.fetchStatic()
     }
   }
 
   /**
-   * Fetch top gainers from FMP API
+   * Fetch top gainers from Yahoo Finance screener
    */
   private async fetchGainers(): Promise<string[]> {
-    if (!this.config.fmpApiKey) {
-      console.warn('FMP API key not provided, using Yahoo Finance fallback')
-      return this.fetchYahooGainers()
-    }
-
     try {
-      const url = `https://financialmodelingprep.com/api/v3/stock_market/gainers?apikey=${this.config.fmpApiKey}`
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      })
+      const tickers = await YahooFinance.screener('gainers', this.config.limit || 50)
 
-      if (!response.ok) {
-        throw new Error(`FMP API error: ${response.status}`)
+      if (tickers.length > 0) {
+        return tickers.slice(0, this.config.limit)
       }
 
-      const data = (await response.json()) as any[]
-      return this.filterAndExtractTickers(data)
+      throw new Error('No gainers found')
     } catch (error) {
-      console.error('FMP gainers fetch failed, using fallback:', error)
-      return this.fetchYahooGainers()
+      console.error('Yahoo Finance gainers fetch failed, using static list:', error)
+      return this.fetchStatic()
     }
   }
 
   /**
-   * Fetch top losers from FMP API
+   * Fetch top losers from Yahoo Finance screener
    */
   private async fetchLosers(): Promise<string[]> {
-    if (!this.config.fmpApiKey) {
-      console.warn('FMP API key not provided, using Yahoo Finance fallback')
-      return this.fetchStatic()
-    }
-
     try {
-      const url = `https://financialmodelingprep.com/api/v3/stock_market/losers?apikey=${this.config.fmpApiKey}`
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      })
+      const tickers = await YahooFinance.screener('losers', this.config.limit || 50)
 
-      if (!response.ok) {
-        throw new Error(`FMP API error: ${response.status}`)
+      if (tickers.length > 0) {
+        return tickers.slice(0, this.config.limit)
       }
 
-      const data = (await response.json()) as any[]
-      return this.filterAndExtractTickers(data)
+      throw new Error('No losers found')
     } catch (error) {
-      console.error('FMP losers fetch failed, using fallback:', error)
+      console.error('Yahoo Finance losers fetch failed, using static list:', error)
       return this.fetchStatic()
     }
   }
 
   /**
-   * Fetch mixed list: combination of actives and gainers
+   * Fetch mixed list: combination of trending and gainers
    */
   private async fetchMixed(): Promise<string[]> {
     try {
-      const [actives, gainers] = await Promise.all([this.fetchMostActive(), this.fetchGainers()])
+      const [trending, gainers] = await Promise.all([
+        YahooFinance.trending(Math.ceil((this.config.limit || 50) / 2)),
+        YahooFinance.screener('gainers', Math.ceil((this.config.limit || 50) / 2)),
+      ])
 
       // Combine and deduplicate
-      const combined = [...new Set([...actives, ...gainers])]
+      const combined = [...new Set([...trending, ...gainers])]
       return combined.slice(0, this.config.limit)
     } catch (error) {
       console.error('Mixed fetch failed:', error)
@@ -158,8 +136,7 @@ export class TickerFetcher {
   }
 
   /**
-   * Fetch top cryptocurrencies
-   * Uses CoinGecko API (free, no key required) with Yahoo Finance ticker format
+   * Fetch top cryptocurrencies from CoinGecko API (free, no key required)
    */
   private async fetchCrypto(): Promise<string[]> {
     try {
@@ -180,10 +157,10 @@ export class TickerFetcher {
       const data = (await response.json()) as any[]
 
       // Map CoinGecko symbols to Yahoo Finance format (SYMBOL-USD)
-      // Filter out stablecoins if desired
+      // Filter out stablecoins
       const cryptoTickers = data
         .filter((coin) => {
-          // Optional: Filter out stablecoins
+          // Filter out stablecoins
           const isStablecoin = ['usdt', 'usdc', 'dai', 'busd', 'tusd'].includes(coin.id.toLowerCase())
           return !isStablecoin && coin.current_price > 0
         })
@@ -206,152 +183,9 @@ export class TickerFetcher {
   }
 
   /**
-   * Fetch most active stocks from Yahoo Finance
-   * Uses the public trending/actives endpoint as a simpler alternative
-   */
-  private async fetchYahooMostActive(): Promise<string[]> {
-    try {
-      // Try the simpler Yahoo Finance trending tickers endpoint first
-      const url = 'https://query1.finance.yahoo.com/v1/finance/trending/US?count=50'
-
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          Accept: 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Yahoo Finance API error: ${response.status}`)
-      }
-
-      const data = (await response.json()) as any
-
-      if (data?.finance?.result?.[0]?.quotes) {
-        const tickers = data.finance.result[0].quotes
-          .map((quote: any) => quote.symbol)
-          .filter((symbol: string) => symbol && !symbol.includes('^') && !symbol.includes('='))
-          .slice(0, this.config.limit)
-
-        if (tickers.length > 0) {
-          return tickers
-        }
-      }
-
-      throw new Error('Invalid Yahoo Finance response format')
-    } catch (error) {
-      console.error('Yahoo Finance fetch failed:', error)
-      return this.fetchStatic()
-    }
-  }
-
-  /**
-   * Fetch gainers from Yahoo Finance
-   * Note: Yahoo Finance doesn't have a reliable public gainers endpoint
-   * This falls back to trending stocks
-   */
-  private async fetchYahooGainers(): Promise<string[]> {
-    try {
-      // Yahoo's gainers endpoint is not publicly accessible without auth
-      // Fall back to trending as a proxy for active/popular stocks
-      console.warn('Yahoo Finance gainers endpoint not available, using trending stocks')
-      return this.fetchYahooMostActive()
-    } catch (error) {
-      console.error('Yahoo Finance gainers fetch failed:', error)
-      return this.fetchStatic()
-    }
-  }
-
-  /**
-   * Filter and extract tickers from FMP response
-   */
-  private filterAndExtractTickers(data: any[]): string[] {
-    if (!Array.isArray(data)) {
-      return this.fetchStatic()
-    }
-
-    return data
-      .filter((stock) => {
-        const price = stock.price || stock.lastPrice || 0
-        const volume = stock.volume || 0
-
-        return (
-          price >= (this.config.minPrice || 0) &&
-          price <= (this.config.maxPrice || 10000) &&
-          volume >= (this.config.minVolume || 0)
-        )
-      })
-      .map((stock) => stock.symbol || stock.ticker)
-      .filter((symbol) => symbol && typeof symbol === 'string')
-      .slice(0, this.config.limit)
-  }
-
-  /**
    * Fallback to static popular tickers
    */
   private fetchStatic(): string[] {
-    // Import from tickers.ts
-    const POPULAR_TICKERS = [
-      'AAPL',
-      'MSFT',
-      'GOOGL',
-      'AMZN',
-      'META',
-      'NVDA',
-      'TSLA',
-      'NFLX',
-      'AMD',
-      'INTC',
-      'ORCL',
-      'ADBE',
-      'CRM',
-      'CSCO',
-      'JPM',
-      'BAC',
-      'WFC',
-      'GS',
-      'MS',
-      'V',
-      'MA',
-      'JNJ',
-      'UNH',
-      'PFE',
-      'ABBV',
-      'MRK',
-      'TMO',
-      'LLY',
-      'WMT',
-      'HD',
-      'DIS',
-      'NKE',
-      'MCD',
-      'SBUX',
-      'COST',
-      'BA',
-      'CAT',
-      'GE',
-      'MMM',
-      'HON',
-      'UPS',
-      'RTX',
-      'XOM',
-      'CVX',
-      'COP',
-      'SLB',
-      'EOG',
-      'T',
-      'VZ',
-      'TMUS',
-      'PLTR',
-      'COIN',
-      'RBLX',
-      'SNOW',
-      'DKNG',
-      'SQ',
-      'SHOP',
-    ]
-
     return POPULAR_TICKERS.slice(0, this.config.limit || 50)
   }
 
@@ -359,27 +193,6 @@ export class TickerFetcher {
    * Fallback to static crypto tickers
    */
   private fetchStaticCrypto(): string[] {
-    const CRYPTO_TICKERS = [
-      'BTC-USD',
-      'ETH-USD',
-      'BNB-USD',
-      'SOL-USD',
-      'XRP-USD',
-      'ADA-USD',
-      'DOGE-USD',
-      'AVAX-USD',
-      'DOT-USD',
-      'MATIC-USD',
-      'LINK-USD',
-      'UNI-USD',
-      'LTC-USD',
-      'ATOM-USD',
-      'XLM-USD',
-      'ALGO-USD',
-      'SHIB-USD',
-      'TRX-USD',
-    ]
-
     return CRYPTO_TICKERS.slice(0, this.config.limit || 20)
   }
 }

@@ -318,15 +318,34 @@ export class TechnicalIndicators {
 }
 
 /**
- * Cache utilities
+ * Cache utilities with tiered TTL strategy
  */
 export class CacheManager {
   private cache: KVNamespace | undefined
   private ttl: number = 300 // 5 minutes default
 
+  // Tiered TTL strategy (in seconds)
+  private static readonly CACHE_TIERS = {
+    quote: 60, // 1 minute for real-time quotes
+    analysis: 300, // 5 minutes for analysis results
+    historical: 3600, // 1 hour for historical data
+    tickers: 1800, // 30 minutes for ticker lists
+  }
+
   constructor(cache?: KVNamespace, ttl: number = 300) {
     this.cache = cache
     this.ttl = ttl
+  }
+
+  /**
+   * Get cache tier TTL based on key prefix
+   */
+  private getTierTTL(key: string): number {
+    if (key.startsWith('quote:')) return CacheManager.CACHE_TIERS.quote
+    if (key.startsWith('stock:')) return CacheManager.CACHE_TIERS.analysis
+    if (key.startsWith('historical:')) return CacheManager.CACHE_TIERS.historical
+    if (key.startsWith('tickers:')) return CacheManager.CACHE_TIERS.tickers
+    return this.ttl // default
   }
 
   async get(key: string): Promise<any | null> {
@@ -338,16 +357,16 @@ export class CacheManager {
 
       const cached = JSON.parse(value)
       const age = Date.now() - cached.timestamp
+      const ttl = this.getTierTTL(key)
 
       // Return cached data if less than TTL
-      if (age < this.ttl * 1000) {
+      if (age < ttl * 1000) {
         return cached.data
       }
 
       return null
     } catch (e) {
-      // In Cloudflare Workers, we don't want to log errors in production
-      // but this check is moot since this code only runs in development anyway
+      // Gracefully handle cache errors
       return null
     }
   }
@@ -361,12 +380,65 @@ export class CacheManager {
         timestamp: Date.now(),
       }
 
+      const ttl = this.getTierTTL(key)
+
       await this.cache.put(key, JSON.stringify(cacheEntry), {
-        expirationTtl: this.ttl,
+        expirationTtl: ttl,
       })
     } catch (e) {
-      // In Cloudflare Workers, we don't want to log errors in production
-      // but this check is moot since this code only runs in development anyway
+      // Gracefully handle cache errors
+    }
+  }
+
+  /**
+   * Stale-while-revalidate: Return stale data immediately while fetching fresh data in background
+   * @param key Cache key
+   * @param fetchFn Function to fetch fresh data
+   * @param staleTime How long to consider data fresh (seconds)
+   * @param maxStale Maximum age of stale data to return (seconds)
+   */
+  async getWithRevalidate<T>(
+    key: string,
+    fetchFn: () => Promise<T>,
+    staleTime: number = 300,
+    maxStale: number = 3600,
+  ): Promise<T> {
+    if (!this.cache) {
+      return await fetchFn()
+    }
+
+    try {
+      const value = await this.cache.get(key)
+
+      if (value) {
+        const cached = JSON.parse(value)
+        const age = Date.now() - cached.timestamp
+
+        // If fresh, return immediately
+        if (age < staleTime * 1000) {
+          return cached.data as T
+        }
+
+        // If stale but not too old, return stale data and revalidate in background
+        if (age < maxStale * 1000) {
+          // Don't await - fire and forget background revalidation
+          fetchFn().then((freshData) => {
+            this.set(key, freshData).catch(() => {
+              // Ignore revalidation errors
+            })
+          })
+
+          return cached.data as T
+        }
+      }
+
+      // No cache or too old - fetch fresh data
+      const freshData = await fetchFn()
+      await this.set(key, freshData)
+      return freshData
+    } catch (e) {
+      // On error, try to fetch fresh data
+      return await fetchFn()
     }
   }
 }

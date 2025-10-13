@@ -12,9 +12,9 @@ A high-performance **Cloudflare Workers** stock and cryptocurrency analysis API 
 ✅ **Global Edge Deployment** - Runs on Cloudflare's 300+ data centers worldwide
 ✅ **Sub-50ms Response Times** - Leverages edge computing for instant analysis
 ✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, losers, or top cryptos
-✅ **Multi-API Support** - FMP API, CoinGecko, and Yahoo Finance with fallbacks
+✅ **100% Free Data Sources** - Yahoo Finance + CoinGecko APIs with intelligent fallbacks
 ✅ **Comprehensive Analysis** - 12+ technical indicators + fundamentals
-✅ **Smart Caching** - 5-minute cache for analysis + 30-minute cache for ticker lists
+✅ **Smart Caching** - 5-minute cache for analysis, optimized for performance
 ✅ **Auto-scaling** - Handles millions of requests seamlessly
 ✅ **Zero Cold Starts** - Instant responses, no warm-up needed
 ✅ **Free Tier** - 100,000 requests/day included on Cloudflare's free plan
@@ -74,7 +74,7 @@ stockpulse/
 ## ⚙️ Installation & Setup
 
 ### Prerequisites
-- Node.js 18+ installed
+- Bun 1.0+ installed ([Install Bun](https://bun.sh))
 - Cloudflare account (free tier works)
 
 ### Quick Start
@@ -85,10 +85,10 @@ git clone <your-repo-url>
 cd stockpulse
 
 # Install dependencies
-npm install
+bun install
 
 # Start local development server
-npm run dev
+bun run dev
 
 # API will be available at http://localhost:8787
 ```
@@ -97,46 +97,39 @@ npm run dev
 
 ```bash
 # Login to Cloudflare
-npx wrangler login
+bunx wrangler login
 
 # Deploy to production
-npm run deploy
+bun run deploy
 
 # View live logs
-npm run tail
+bun run tail
 ```
 
 ### Optional: Enable KV Caching
 
 ```bash
 # Create KV namespace for stock data caching
-npx wrangler kv namespace create "STOCK_CACHE"
-npx wrangler kv namespace create "STOCK_CACHE" --preview
-
-# Create KV namespace for ticker list caching
-npx wrangler kv namespace create "TICKER_CACHE"
-npx wrangler kv namespace create "TICKER_CACHE" --preview
+bunx wrangler kv namespace create "STOCK_CACHE"
+bunx wrangler kv namespace create "STOCK_CACHE" --preview
 
 # Copy the namespace IDs and update wrangler.toml:
 # Update the [[kv_namespaces]] sections with your IDs
 ```
 
-### Optional: Enable Dynamic Ticker Fetching
+### Ticker Strategy Configuration
 
-```bash
-# Get a free API key from Financial Modeling Prep
-# Visit: https://site.financialmodelingprep.com/developer/docs
+The API automatically fetches market data from Yahoo Finance with intelligent fallbacks:
 
-# Set the API key as a secret (recommended)
-npx wrangler secret put FMP_API_KEY
-# Enter your API key when prompted
+**Available Strategies** (configured in wrangler.toml):
+- `most_active` - Uses Yahoo Finance trending tickers (default)
+- `gainers` - Top performing stocks from Yahoo screener
+- `losers` - Worst performing stocks from Yahoo screener  
+- `mixed` - Combination of trending and gainers
+- `crypto` - Top cryptocurrencies from CoinGecko API (free, no key required)
+- `static` - Predefined popular ticker list
 
-# Or for development, add to .dev.vars file (don't commit!)
-echo "FMP_API_KEY=your_key_here" > .dev.vars
-
-# Configure ticker strategy in wrangler.toml (already set)
-# Options: most_active, gainers, losers, mixed, or static
-```
+**No API keys required!** All strategies work with free Yahoo Finance and CoinGecko APIs.
 
 ### Custom Domain Setup
 
@@ -323,18 +316,15 @@ curl "http://localhost:8787/api/scanner?limit=20&strategy=crypto"
 ```
 
 **How it works:**
-1. Fetches real-time market movers from Financial Modeling Prep API (stocks)
-2. Or fetches top cryptos from CoinGecko API (crypto strategy)
-3. Falls back to Yahoo Finance trending stocks if FMP unavailable
-4. Falls back to static list if all APIs fail
-5. Caches ticker lists for 30 minutes to avoid rate limits
-6. Filters stocks: minimum $5 price, 1M+ daily volume
-7. Filters crypto: excludes stablecoins, requires positive price
-8. Analyzes each ticker and sorts by potential gain
+1. **For stocks**: Fetches from Yahoo Finance trending/screener APIs
+2. **For crypto**: Fetches top cryptos from CoinGecko API (free, no key required)
+3. Falls back to static curated lists if APIs are unavailable
+4. Filters stocks: minimum $5 price, 1M+ daily volume
+5. Filters crypto: excludes stablecoins, requires positive price
+6. Analyzes each ticker and sorts by potential gain
+7. Smart caching prevents excessive API calls
 
-**Note:**
-- For stocks: Without an FMP API key, the system uses Yahoo Finance trending stocks or the static ticker list. For true real-time market movers (most active, gainers, losers), an FMP API key is recommended (free tier available).
-- For crypto: Uses CoinGecko's free API (no key required, 30 calls/min) to fetch top cryptocurrencies by market cap.
+**No API keys required!** All data sources are free and work out of the box.
 
 ---
 
