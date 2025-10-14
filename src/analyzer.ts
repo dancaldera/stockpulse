@@ -1,6 +1,7 @@
-import { YahooFinance } from './yahooFinance'
-import { StockSignal, StockMetrics, AnalysisConfig, ChartData } from './types'
-import { TechnicalIndicators, RetryHandler } from './utils'
+import * as YahooFinance from './yahooFinance'
+import type { StockSignal, StockMetrics, AnalysisConfig, ChartData } from './types'
+import { sma, ema, rsi, macd, bollingerBands, atr, trendStrength, executeWithRetry } from './utils'
+import type { HistoricalData, QuoteData } from './yahooFinance'
 
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   shortMovingAverage: 50,
@@ -70,9 +71,9 @@ export class StockAnalyzer {
         period2: new Date(),
       }
 
-      let historical: any[]
+      let historical: HistoricalData[]
       try {
-        historical = await RetryHandler.executeWithRetry(
+        historical = await executeWithRetry(
           () => YahooFinance.historical(ticker, queryOptions),
           this.config.maxRetryAttempts,
           this.config.retryDelay,
@@ -91,9 +92,9 @@ export class StockAnalyzer {
       }
 
       // Fetch quote for real-time data with retry logic
-      let quote: any
+      let quote: QuoteData
       try {
-        quote = await RetryHandler.executeWithRetry(
+        quote = await executeWithRetry(
           () => YahooFinance.quote(ticker),
           this.config.maxRetryAttempts,
           this.config.retryDelay,
@@ -142,7 +143,7 @@ export class StockAnalyzer {
       return {
         ticker: ticker.toUpperCase(),
         recommendation,
-        confidence: isNaN(confidence) ? 50 : parseFloat(confidence.toFixed(1)),
+        confidence: Number.isNaN(confidence) ? 50 : parseFloat(confidence.toFixed(1)),
         price: parseFloat(currentPrice.toFixed(2)),
         target_price: parseFloat(target.toFixed(2)),
         stop_loss: parseFloat(stopLoss.toFixed(2)),
@@ -154,8 +155,9 @@ export class StockAnalyzer {
         chartData,
         timestamp: new Date().toISOString(),
       }
-    } catch (error: any) {
-      throw new Error(`Analysis failed for ${ticker}: ${error.message}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'An unknown error occurred'
+      throw new Error(`Analysis failed for ${ticker}: ${message}`)
     }
   }
 
@@ -164,38 +166,37 @@ export class StockAnalyzer {
     highs: number[],
     lows: number[],
     volumes: number[],
-    quote: any,
+    quote: QuoteData,
   ): StockMetrics {
     // Moving averages
-    const sma50 = TechnicalIndicators.sma(closes, this.config.shortMovingAverage)
-    const sma200 = TechnicalIndicators.sma(closes, this.config.longMovingAverage)
-    const ema20 = TechnicalIndicators.ema(closes, 20)
+    const sma50 = sma(closes, this.config.shortMovingAverage)
+    const sma200 = sma(closes, this.config.longMovingAverage)
+    const ema20 = ema(closes, 20)
 
     // RSI
-    const rsi = TechnicalIndicators.rsi(closes, this.config.rsiPeriod)
+    const rsiValue = rsi(closes, this.config.rsiPeriod)
 
     // MACD
-    const { macd, signal, histogram } = TechnicalIndicators.macd(
-      closes,
-      this.config.macdFast,
-      this.config.macdSlow,
-      this.config.macdSignal,
-    )
+    const {
+      macd: macdValue,
+      signal,
+      histogram,
+    } = macd(closes, this.config.macdFast, this.config.macdSlow, this.config.macdSignal)
 
     // Bollinger Bands
-    const bb = TechnicalIndicators.bollingerBands(closes, this.config.bollingerPeriod, this.config.bollingerStdDev)
+    const bb = bollingerBands(closes, this.config.bollingerPeriod, this.config.bollingerStdDev)
     const currentPrice = closes[closes.length - 1]
     const bbPosition = (currentPrice - bb.lower) / (bb.upper - bb.lower)
 
     // Volume
-    const volumeSma = TechnicalIndicators.sma(volumes, this.config.volumePeriod)
+    const volumeSma = sma(volumes, this.config.volumePeriod)
     const volumeRatio = volumes[volumes.length - 1] / volumeSma[volumeSma.length - 1]
 
     // ATR
-    const atr = TechnicalIndicators.atr(highs, lows, closes, this.config.atrPeriod)
+    const atrValue = atr(highs, lows, closes, this.config.atrPeriod)
 
     // Trend strength
-    const trendStrength = TechnicalIndicators.trendStrength(closes.slice(-this.config.shortMovingAverage))
+    const trendStrengthValue = trendStrength(closes.slice(-this.config.shortMovingAverage))
 
     // Price change
     const priceChange50d =
@@ -208,14 +209,14 @@ export class StockAnalyzer {
       sma_50: sma50[sma50.length - 1],
       sma_200: sma200[sma200.length - 1],
       ema_20: ema20[ema20.length - 1],
-      rsi,
-      macd,
+      rsi: rsiValue,
+      macd: macdValue,
       macd_signal: signal,
       macd_histogram: histogram,
       bb_position: bbPosition,
       volume_ratio: volumeRatio,
-      atr,
-      trend_strength: trendStrength,
+      atr: atrValue,
+      trend_strength: trendStrengthValue,
       pe_ratio: quote.trailingPE,
       forward_pe: quote.forwardPE,
       peg_ratio: quote.trailingPegRatio,
@@ -457,11 +458,11 @@ export class StockAnalyzer {
    * Calculate weighted confidence score based on indicator strength
    * Returns a percentage (0-100) representing how confident we are in the signal
    */
-  private calculateConfidenceScore(metrics: StockMetrics, bullishCount: number, bearishCount: number): number {
+  private calculateConfidenceScore(_metrics: StockMetrics, bullishCount: number, bearishCount: number): number {
     // Simple confidence based on indicator agreement
     const agreement = Math.max(bullishCount, bearishCount)
-    const baseConfidence = 50 + (agreement * 5)
-    
+    const baseConfidence = 50 + agreement * 5
+
     // Clamp to 0-100 range
     return Math.max(0, Math.min(100, baseConfidence))
   }
@@ -493,32 +494,32 @@ export class StockAnalyzer {
 
   private generateChartData(
     closes: number[],
-    highs: number[],
-    lows: number[],
+    _highs: number[],
+    _lows: number[],
     volumes: number[],
     dates: string[],
   ): ChartData {
     // Calculate full arrays for all indicators
-    const sma50Array = TechnicalIndicators.sma(closes, this.config.shortMovingAverage)
-    const sma200Array = TechnicalIndicators.sma(closes, this.config.longMovingAverage)
-    const ema20Array = TechnicalIndicators.ema(closes, 20)
+    const sma50Array = sma(closes, this.config.shortMovingAverage)
+    const sma200Array = sma(closes, this.config.longMovingAverage)
+    const ema20Array = ema(closes, 20)
 
     // Calculate RSI values for all data points
     const rsiValues: number[] = []
     for (let i = this.config.rsiPeriod; i < closes.length; i++) {
-      const rsi = TechnicalIndicators.rsi(closes.slice(0, i + 1), this.config.rsiPeriod)
-      rsiValues.push(rsi)
+      const rsiValue = rsi(closes.slice(0, i + 1), this.config.rsiPeriod)
+      rsiValues.push(rsiValue)
     }
 
     // Calculate MACD arrays
     // MACD line is the difference between 12-period EMA and 26-period EMA
-    const emaFast = TechnicalIndicators.ema(closes, this.config.macdFast) // 12-period
-    const emaSlow = TechnicalIndicators.ema(closes, this.config.macdSlow) // 26-period
+    const emaFast = ema(closes, this.config.macdFast) // 12-period
+    const emaSlow = ema(closes, this.config.macdSlow) // 26-period
 
     // Both EMAs should have the same length as they're calculated on the same data
     // MACD values start when we have both EMAs available
     const macdValues: number[] = []
-    const macdStartIndex = this.config.macdSlow - 1 // MACD starts at index 25 (needs 26 data points)
+    const _macdStartIndex = this.config.macdSlow - 1 // MACD starts at index 25 (needs 26 data points)
 
     // Calculate MACD line for each point where both EMAs are available
     for (let i = 0; i < emaSlow.length; i++) {
@@ -526,7 +527,7 @@ export class StockAnalyzer {
     }
 
     // Signal line is 9-period EMA of MACD line
-    const macdSignalValues = TechnicalIndicators.ema(macdValues, this.config.macdSignal)
+    const macdSignalValues = ema(macdValues, this.config.macdSignal)
 
     // Histogram is MACD line minus Signal line
     // Both arrays need to be aligned since signal is shorter
@@ -547,21 +548,21 @@ export class StockAnalyzer {
       const priceWindow = closes.slice(windowStart, i + 1)
 
       // Calculate SMA (middle band)
-      const sma = priceWindow.reduce((sum, p) => sum + p, 0) / priceWindow.length
+      const smaValue = priceWindow.reduce((sum, p) => sum + p, 0) / priceWindow.length
 
       // Calculate standard deviation
-      const squaredDiffs = priceWindow.map((p) => Math.pow(p - sma, 2))
+      const squaredDiffs = priceWindow.map((p) => (p - smaValue) ** 2)
       const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / priceWindow.length
       const std = Math.sqrt(variance)
 
       // Calculate bands
-      bbMiddle.push(sma)
-      bbUpper.push(sma + this.config.bollingerStdDev * std)
-      bbLower.push(sma - this.config.bollingerStdDev * std)
+      bbMiddle.push(smaValue)
+      bbUpper.push(smaValue + this.config.bollingerStdDev * std)
+      bbLower.push(smaValue - this.config.bollingerStdDev * std)
     }
 
     // Calculate volume SMA
-    const volumeSmaArray = TechnicalIndicators.sma(volumes, this.config.volumePeriod)
+    const volumeSmaArray = sma(volumes, this.config.volumePeriod)
 
     // Show the last 250 days of data (roughly 1 year of trading days)
     // But ensure we have at least SMA 200 calculated
@@ -608,7 +609,7 @@ export class StockAnalyzer {
     // Histogram starts same time as signal line
     const macdHistogramStartIndex = macdSignalStartIndex
 
-    const chartData = {
+    const chartDataResult = {
       dates: dates.slice(chartStartIndex),
       prices: closes.slice(chartStartIndex),
       // SMA arrays already start at their period-1 index
@@ -626,6 +627,6 @@ export class StockAnalyzer {
       volume_sma: alignArray(volumeSmaArray, this.config.volumePeriod - 1),
     }
 
-    return chartData
+    return chartDataResult
   }
 }

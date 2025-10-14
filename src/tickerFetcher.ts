@@ -3,7 +3,7 @@
  * Fetches top tickers using Yahoo Finance and CoinGecko APIs (100% free, no API keys required)
  */
 
-import { YahooFinance } from './yahooFinance'
+import * as YahooFinance from './yahooFinance'
 import { POPULAR_TICKERS, CRYPTO_TICKERS } from './tickers'
 
 export interface TickerFetcherConfig {
@@ -21,6 +21,12 @@ export interface TickerInfo {
   change?: number
   changePercent?: number
   volume?: number
+}
+
+interface CoinGeckoMarket {
+  id: string
+  symbol: string
+  current_price: number
 }
 
 export class TickerFetcher {
@@ -52,7 +58,6 @@ export class TickerFetcher {
           return await this.fetchMixed()
         case 'crypto':
           return await this.fetchCrypto()
-        case 'static':
         default:
           return this.fetchStatic()
       }
@@ -154,7 +159,7 @@ export class TickerFetcher {
         throw new Error(`CoinGecko API error: ${response.status}`)
       }
 
-      const data = (await response.json()) as any[]
+      const data = (await response.json()) as CoinGeckoMarket[]
 
       // Map CoinGecko symbols to Yahoo Finance format (SYMBOL-USD)
       // Filter out stablecoins

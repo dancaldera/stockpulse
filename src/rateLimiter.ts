@@ -1,17 +1,18 @@
 import { DurableObject } from 'cloudflare:workers'
+import type { Bindings } from './types'
 
 export class RateLimiter extends DurableObject {
   private counters: number[] = []
 
   constructor(
     state: DurableObjectState,
-    public env: any,
+    public env: Bindings,
   ) {
     super(state, env)
     // Initialize state if needed
   }
 
-  async fetch(request: Request): Promise<Response> {
+  async fetch(_request: Request): Promise<Response> {
     const current_time = Date.now()
     const window_size = 60 * 1000 // 1 minute window
     const max_requests = 100 // 100 requests per minute
@@ -58,7 +59,7 @@ export class RateLimitManager {
         const retryAfter = response.headers.get('Retry-After')
         return {
           allowed: false,
-          retryAfter: retryAfter ? parseInt(retryAfter) : undefined,
+          retryAfter: retryAfter ? parseInt(retryAfter, 10) : undefined,
         }
       }
 

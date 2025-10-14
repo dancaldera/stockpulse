@@ -1,11 +1,11 @@
-import { Hono } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
 import { cors } from 'hono/cors'
 import { StockAnalyzer } from './analyzer'
-import { CacheManager, StockValidator, RetryHandler } from './utils'
+import { CacheManager, validateTicker } from './utils'
 import { RateLimitManager, RateLimiter } from './rateLimiter'
-import { Bindings } from './types'
+import type { Bindings, ValidationResult } from './types'
 import { dashboardHTML } from './dashboard'
-import { TickerFetcher } from './tickerFetcher'
+import { TickerFetcher, type TickerFetcherConfig } from './tickerFetcher'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -18,7 +18,7 @@ const analyzer = new StockAnalyzer()
 /**
  * Rate limiting middleware
  */
-const rateLimit = async (c: any, next: any) => {
+const rateLimit = async (c: Context<{ Bindings: Bindings }>, next: Next) => {
   if (!c.env.RATE_LIMITER) {
     return await next()
   }
@@ -59,7 +59,7 @@ app.get('/api/analyze/:ticker', rateLimit, async (c) => {
 
   try {
     // Validate and sanitize ticker
-    const validation = StockValidator.validateTicker(tickerInput)
+    const validation = validateTicker(tickerInput)
 
     if (!validation.isValid) {
       return c.json(
@@ -100,11 +100,12 @@ app.get('/api/analyze/:ticker', rateLimit, async (c) => {
       data: signal,
       cached: false,
     })
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred'
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: message,
       },
       400,
     )
@@ -137,11 +138,11 @@ app.post('/api/batch', rateLimit, async (c) => {
     }
 
     // Validate all tickers first
-    const validatedTickers: { ticker: string; validation: any }[] = []
+    const validatedTickers: { ticker: string; validation: ValidationResult }[] = []
     const validationErrors: { ticker: string; errors: string[] }[] = []
 
     for (const ticker of tickers) {
-      const validation = StockValidator.validateTicker(ticker)
+      const validation = validateTicker(ticker)
       if (validation.isValid) {
         validatedTickers.push({
           ticker: validation.sanitizedTicker,
@@ -190,11 +191,12 @@ app.post('/api/batch', rateLimit, async (c) => {
       success: true,
       data,
     })
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred'
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: message,
       },
       400,
     )
@@ -205,10 +207,12 @@ app.post('/api/batch', rateLimit, async (c) => {
 app.get('/api/scanner', rateLimit, async (c) => {
   try {
     // Get limit from query params (default 20, max 50)
-    const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50)
+    const limit = Math.min(parseInt(c.req.query('limit') || '20', 10), 50)
 
     // Get strategy from query params or environment
-    const strategy = (c.req.query('strategy') || c.env.TICKER_STRATEGY || 'most_active') as any
+    const strategy = (c.req.query('strategy') ||
+      c.env.TICKER_STRATEGY ||
+      'most_active') as TickerFetcherConfig['strategy']
 
     // Fetch tickers based on strategy
     const tickerFetcher = new TickerFetcher({
@@ -246,11 +250,12 @@ app.get('/api/scanner', rateLimit, async (c) => {
       total: data.length,
       strategy,
     })
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred'
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: message,
       },
       400,
     )
@@ -284,11 +289,11 @@ app.post('/api/scanner', rateLimit, async (c) => {
     }
 
     // Validate all tickers first
-    const validatedTickers: { ticker: string; validation: any }[] = []
+    const validatedTickers: { ticker: string; validation: ValidationResult }[] = []
     const validationErrors: { ticker: string; errors: string[] }[] = []
 
     for (const ticker of tickers) {
-      const validation = StockValidator.validateTicker(ticker)
+      const validation = validateTicker(ticker)
       if (validation.isValid) {
         validatedTickers.push({
           ticker: validation.sanitizedTicker,
@@ -341,11 +346,12 @@ app.post('/api/scanner', rateLimit, async (c) => {
       data,
       total: data.length,
     })
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred'
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: message,
       },
       400,
     )
