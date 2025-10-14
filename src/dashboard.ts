@@ -716,21 +716,330 @@ export const dashboardHTML = `<!DOCTYPE html>
             color: white;
         }
 
+        .market-scanner-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .scanner-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .strategy-select {
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .refresh-button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .strategy-info {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            margin-left: auto;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 1024px) {
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
         @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            .header {
+                margin-bottom: 24px;
+            }
+
             .header h1 {
-                font-size: 2.5rem;
+                font-size: 2rem;
+                margin-bottom: 8px;
+            }
+
+            .header p {
+                font-size: 1rem;
+            }
+
+            .card {
+                padding: 20px;
+                margin-bottom: 16px;
+                border-radius: 16px;
+            }
+
+            .input-section {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            input[type="text"], select, button {
+                width: 100%;
+                padding: 12px 16px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            button {
+                padding: 14px 24px;
+            }
+
+            .tabs {
+                gap: 8px;
+            }
+
+            .tab {
+                padding: 10px 16px;
+                font-size: 0.9rem;
+                flex: 1;
+                text-align: center;
+                min-width: fit-content;
+            }
+
+            .stock-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .ticker {
+                font-size: 1.8rem;
+            }
+
+            .price {
+                font-size: 1.5rem;
+            }
+
+            .recommendation {
+                font-size: 0.8rem;
+                padding: 8px 16px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .metric {
+                padding: 16px;
+            }
+
+            .metric-label {
+                font-size: 0.75rem;
+            }
+
+            .metric-value {
+                font-size: 1.2rem;
+            }
+
+            .batch-grid, .scanner-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .batch-item, .scanner-item {
+                padding: 16px;
+            }
+
+            .scanner-ticker {
+                font-size: 1.2rem;
+            }
+
+            .scanner-price {
+                font-size: 1rem;
+            }
+
+            .chart-container {
+                padding: 16px;
+                margin-bottom: 16px;
+            }
+
+            .chart-title {
+                font-size: 1rem;
+                margin-bottom: 12px;
+            }
+
+            .chart-description {
+                font-size: 0.85rem;
+                margin-bottom: 16px;
+            }
+
+            .chart-canvas {
+                height: 280px;
+            }
+
+            .chart-controls {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+            }
+
+            .chart-control-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .chart-select {
+                flex: 1;
+            }
+
+            .technical-details {
+                padding: 16px;
+            }
+
+            .technical-details h3 {
+                font-size: 1.1rem;
+                margin-bottom: 16px;
+            }
+
+            .detail-row {
+                padding: 10px 0;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .reasons h3 {
+                font-size: 1.1rem;
+            }
+
+            .reason {
+                padding: 12px 14px;
+                font-size: 0.9rem;
+            }
+
+            .back-button {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
+
+            .timestamp {
+                font-size: 0.8rem;
+                margin-top: 16px;
+            }
+
+            /* Improve touch targets for mobile */
+            button, .tab, .batch-item, .scanner-item, .back-button {
+                min-height: 44px; /* iOS recommended touch target */
+            }
+
+            /* Market Scanner section on mobile */
+            .market-scanner-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .scanner-label {
+                width: 100%;
+                text-align: center;
+                font-size: 0.9rem;
+            }
+
+            .strategy-select {
+                width: 100%;
+                padding: 12px 16px;
+            }
+
+            .refresh-button {
+                width: 100%;
+                padding: 12px 20px;
+            }
+
+            .strategy-info {
+                width: 100%;
+                text-align: center;
+                margin-left: 0;
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.75rem;
+            }
+
+            .header p {
+                font-size: 0.9rem;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .ticker {
+                font-size: 1.5rem;
+            }
+
+            .price {
+                font-size: 1.25rem;
             }
 
             .metrics-grid {
                 grid-template-columns: 1fr;
             }
 
-            .batch-grid, .scanner-grid {
-                grid-template-columns: 1fr;
+            .metric {
+                padding: 14px;
             }
 
             .chart-canvas {
-                height: 250px;
+                height: 240px;
+            }
+
+            .scanner-metrics {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .chart-legend {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
+        /* Landscape orientation on mobile */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .chart-canvas {
+                height: 300px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        /* Prevent text zoom on iOS */
+        @media (max-width: 768px) {
+            input[type="text"],
+            select,
+            textarea {
+                font-size: 16px !important;
             }
         }
     </style>
@@ -750,22 +1059,11 @@ export const dashboardHTML = `<!DOCTYPE html>
             <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 12px;">Enter a single ticker for detailed analysis, or multiple tickers separated by commas for comparison</p>
 
             <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <label style="color: rgba(255, 255, 255, 0.8); font-weight: 600; font-size: 0.95rem;">
+                <div class="market-scanner-controls">
+                    <label class="scanner-label">
                         Market Scanner:
                     </label>
-                    <select id="strategy-selector" onchange="loadTopOpportunities()" style="
-                        background: rgba(99, 102, 241, 0.2);
-                        border: 1px solid rgba(99, 102, 241, 0.4);
-                        color: white;
-                        padding: 10px 16px;
-                        border-radius: 12px;
-                        font-size: 0.95rem;
-                        cursor: pointer;
-                        outline: none;
-                        transition: all 0.3s ease;
-                        font-weight: 500;
-                    ">
+                    <select id="strategy-selector" onchange="loadTopOpportunities()" class="strategy-select">
                         <option value="most_active">🔥 Most Active</option>
                         <option value="gainers">📈 Top Gainers</option>
                         <option value="losers">📉 Top Losers</option>
@@ -773,21 +1071,10 @@ export const dashboardHTML = `<!DOCTYPE html>
                         <option value="crypto">₿ Cryptocurrencies</option>
                         <option value="static">⭐ Popular Stocks</option>
                     </select>
-                    <button onclick="loadTopOpportunities()" style="
-                        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                        border: none;
-                        color: white;
-                        padding: 10px 20px;
-                        border-radius: 12px;
-                        font-size: 0.95rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.3s ease;
-                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-                    ">
+                    <button onclick="loadTopOpportunities()" class="refresh-button">
                         🔄 Refresh
                     </button>
-                    <span id="strategy-info" style="color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; margin-left: auto;"></span>
+                    <span id="strategy-info" class="strategy-info"></span>
                 </div>
             </div>
         </div>
