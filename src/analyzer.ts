@@ -119,10 +119,21 @@ export class StockAnalyzer {
       const chartData = this.generateChartData(closes, highs, lows, volumes, dates)
 
       // Calculate score
-      const { score, reasons } = this.calculateScore(metrics)
+      const { score, reasons, bullishCount, bearishCount } = this.calculateScore(metrics)
 
       // Get recommendation
       const recommendation = this.getRecommendation(score)
+
+      // Calculate weighted confidence score with fallback
+      let confidence: number
+      try {
+        confidence = this.calculateConfidenceScore(metrics, bullishCount, bearishCount)
+        console.log(`[DEBUG] Confidence calculated: ${confidence}, bullish: ${bullishCount}, bearish: ${bearishCount}`)
+      } catch (error) {
+        console.error(`[ERROR] Confidence calculation failed:`, error)
+        // Fallback to absolute score if confidence calculation fails
+        confidence = Math.min(Math.abs(score), 100)
+      }
 
       // Calculate targets
       const currentPrice = closes[closes.length - 1]
@@ -131,7 +142,7 @@ export class StockAnalyzer {
       return {
         ticker: ticker.toUpperCase(),
         recommendation,
-        confidence: Math.min(Math.abs(score), 100),
+        confidence: isNaN(confidence) ? 50 : parseFloat(confidence.toFixed(1)),
         price: parseFloat(currentPrice.toFixed(2)),
         target_price: parseFloat(target.toFixed(2)),
         stop_loss: parseFloat(stopLoss.toFixed(2)),
@@ -214,7 +225,12 @@ export class StockAnalyzer {
     }
   }
 
-  private calculateScore(metrics: StockMetrics): { score: number; reasons: string[] } {
+  private calculateScore(metrics: StockMetrics): {
+    score: number
+    reasons: string[]
+    bullishCount: number
+    bearishCount: number
+  } {
     let score = 0
     const reasons: string[] = []
     const warnings: string[] = []
@@ -234,27 +250,35 @@ export class StockAnalyzer {
       reasons.push('✗ Death Cross: 50-day MA below 200-day MA (bearish)')
     }
 
-    // 2. RSI - More nuanced scoring
+    // 2. RSI - Balanced scoring with trend consideration
     if (metrics.rsi < this.config.rsiOversold) {
-      score += 15
+      score += 12 // Reduced from 15
       bullishCount++
       reasons.push(`✓ RSI oversold at ${metrics.rsi.toFixed(1)} (potential bounce)`)
+      // EXTREME oversold gets additional boost
+      if (metrics.rsi < 25) {
+        score += 3
+        warnings.push(`⚠ EXTREME oversold (RSI: ${metrics.rsi.toFixed(1)}) - high risk/reward`)
+      }
     } else if (metrics.rsi > this.config.rsiOverbought) {
-      score -= 15
+      score -= 12 // Reduced from 15
       bearishCount++
       reasons.push(`✗ RSI overbought at ${metrics.rsi.toFixed(1)} (potential pullback)`)
       // EXTREME overbought is a stronger warning
       if (metrics.rsi > 75) {
-        score -= 5
+        score -= 3 // Reduced from 5
         warnings.push(`⚠ EXTREME overbought (RSI: ${metrics.rsi.toFixed(1)})`)
       }
-    } else if (metrics.rsi >= 40 && metrics.rsi <= 60) {
-      score += 5
-      reasons.push(`✓ RSI neutral at ${metrics.rsi.toFixed(1)} (healthy)`)
-    } else if (metrics.rsi < 25) {
-      // EXTREME oversold is even more bullish
-      score += 5
-      warnings.push(`⚠ EXTREME oversold (RSI: ${metrics.rsi.toFixed(1)}) - high risk/reward`)
+    } else if (metrics.rsi >= 45 && metrics.rsi <= 65) {
+      // Healthy RSI range - slightly bullish
+      score += 3 // Reduced from 5
+      reasons.push(`✓ RSI healthy at ${metrics.rsi.toFixed(1)} (neutral to bullish)`)
+    } else if (metrics.rsi >= 35 && metrics.rsi < 45) {
+      // Slightly bearish but not oversold
+      reasons.push(`○ RSI slightly weak at ${metrics.rsi.toFixed(1)}`)
+    } else if (metrics.rsi > 65 && metrics.rsi <= 70) {
+      // Slightly overbought but not extreme
+      reasons.push(`○ RSI slightly strong at ${metrics.rsi.toFixed(1)}`)
     }
 
     // 3. MACD (INCREASED weight from 15 to 20 when BOTH line and histogram confirm)
@@ -318,9 +342,9 @@ export class StockAnalyzer {
       }
     }
 
-    // 6. Volume (INCREASED from 10 to 15 - CRITICAL for confirmation)
+    // 6. Volume (Supporting indicator - not blocking)
     if (metrics.volume_ratio > 1.5) {
-      score += 15
+      score += 10
       reasons.push(`✓ High volume (${metrics.volume_ratio.toFixed(1)}x average) - strong interest`)
       // Very high volume is even more significant
       if (metrics.volume_ratio > 2.5) {
@@ -328,11 +352,10 @@ export class StockAnalyzer {
         warnings.push(`⚠ VERY high volume (${metrics.volume_ratio.toFixed(1)}x) - major move`)
       }
     } else if (metrics.volume_ratio < 0.5) {
-      score -= 10 // INCREASED penalty from -5
+      score -= 5 // Reduced penalty - volume is supporting, not core
       reasons.push(`✗ Low volume (${metrics.volume_ratio.toFixed(1)}x average) - weak conviction`)
-      // Extremely low volume is very bearish
+      // Extremely low volume warning only, no additional penalty
       if (metrics.volume_ratio < 0.3) {
-        score -= 5
         warnings.push(`⚠ EXTREMELY low volume (${metrics.volume_ratio.toFixed(1)}x) - no interest`)
       }
     }
@@ -348,18 +371,17 @@ export class StockAnalyzer {
       bearishCount++
       reasons.push(`✗ Strong downtrend (strength: ${metrics.trend_strength.toFixed(2)})`)
     } else if (Math.abs(metrics.trend_strength) < 0.3) {
-      // Ranging market - less reliable signals
-      score -= 5
+      // Ranging market - neutral, no penalty (ranging markets are normal)
       warnings.push('⚠ Weak/ranging market - choppy conditions')
     }
 
-    // 8. Extended Move Detection (NEW)
+    // 8. Extended Move Detection - Reduced penalty
     const distanceFromSma200 = ((metrics.current_price - metrics.sma_200) / metrics.sma_200) * 100
-    if (distanceFromSma200 > 25) {
-      score -= 10
+    if (distanceFromSma200 > 30) {
+      score -= 5 // Reduced from -10, and only triggers at 30% (was 25%)
       warnings.push(`⚠ Extended above SMA200 (+${distanceFromSma200.toFixed(1)}%) - overheated`)
-    } else if (distanceFromSma200 < -25) {
-      score += 10
+    } else if (distanceFromSma200 < -30) {
+      score += 5 // More conservative bullish bonus
       warnings.push(`⚠ Extended below SMA200 (${distanceFromSma200.toFixed(1)}%) - oversold`)
     }
 
@@ -379,13 +401,13 @@ export class StockAnalyzer {
       reasons.push(`✓ Excellent PEG ratio: ${metrics.peg_ratio.toFixed(2)}`)
     }
 
-    // 10. VETO CONDITIONS (NEW - can override score)
+    // 10. VETO CONDITIONS - Reduced impact
     let vetoReason: string | null = null
 
     // Cannot BUY if both RSI > 75 AND Bollinger > 0.9 (extreme overbought)
     if (metrics.rsi > 75 && metrics.bb_position > 0.9) {
       if (score > 0) {
-        const reduction = Math.min(score, 25)
+        const reduction = Math.min(score, 15) // Reduced from 25
         score -= reduction
         vetoReason = `🛑 VETO: Extreme overbought (RSI: ${metrics.rsi.toFixed(1)}, BB: ${(metrics.bb_position * 100).toFixed(0)}%) - reduced score by ${reduction}`
       }
@@ -394,21 +416,21 @@ export class StockAnalyzer {
     // Cannot SELL if both RSI < 25 AND Bollinger < 0.1 (extreme oversold)
     if (metrics.rsi < 25 && metrics.bb_position < 0.1) {
       if (score < 0) {
-        const reduction = Math.min(Math.abs(score), 25)
+        const reduction = Math.min(Math.abs(score), 15) // Reduced from 25
         score += reduction
         vetoReason = `🛑 VETO: Extreme oversold (RSI: ${metrics.rsi.toFixed(1)}, BB: ${(metrics.bb_position * 100).toFixed(0)}%) - reduced bearish score by ${reduction}`
       }
     }
 
-    // 11. MULTI-INDICATOR CONFIRMATION (NEW)
+    // 11. MULTI-INDICATOR CONFIRMATION - Reduced penalty
     // For BUY: need at least 3 of 4 key indicators bullish
     // For SELL: need at least 3 of 4 key indicators bearish
     if (score > 30 && bullishCount < 3) {
-      score -= 10
+      score -= 5 // Reduced from -10
       warnings.push('⚠ Bullish score lacks confirmation (fewer than 3 bullish indicators)')
     }
     if (score < -30 && bearishCount < 3) {
-      score += 10
+      score += 5 // Reduced from 10
       warnings.push('⚠ Bearish score lacks confirmation (fewer than 3 bearish indicators)')
     }
 
@@ -418,16 +440,30 @@ export class StockAnalyzer {
       allReasons.unshift(vetoReason) // Add veto at the beginning
     }
 
-    return { score, reasons: allReasons }
+    return { score, reasons: allReasons, bullishCount, bearishCount }
   }
 
   private getRecommendation(score: number): 'STRONG BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG SELL' {
-    // More conservative thresholds to reduce false positives
-    if (score >= 60) return 'STRONG BUY'
-    if (score >= 40) return 'BUY'
-    if (score >= -40) return 'HOLD'
-    if (score >= -60) return 'SELL'
+    // Adjusted thresholds to match realistic score distribution
+    // Typical bullish stocks score 20-35, bearish score -20 to -35
+    if (score >= 35) return 'STRONG BUY'
+    if (score >= 20) return 'BUY'
+    if (score >= -20) return 'HOLD'
+    if (score >= -35) return 'SELL'
     return 'STRONG SELL'
+  }
+
+  /**
+   * Calculate weighted confidence score based on indicator strength
+   * Returns a percentage (0-100) representing how confident we are in the signal
+   */
+  private calculateConfidenceScore(metrics: StockMetrics, bullishCount: number, bearishCount: number): number {
+    // Simple confidence based on indicator agreement
+    const agreement = Math.max(bullishCount, bearishCount)
+    const baseConfidence = 50 + (agreement * 5)
+    
+    // Clamp to 0-100 range
+    return Math.max(0, Math.min(100, baseConfidence))
   }
 
   private calculateTargets(
