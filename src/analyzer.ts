@@ -1,7 +1,7 @@
-import * as YahooFinance from './yahooFinance'
 import type { StockSignal, StockMetrics, AnalysisConfig, ChartData } from './types'
 import { sma, ema, rsi, macd, bollingerBands, atr, trendStrength, executeWithRetry } from './utils'
 import type { HistoricalData, QuoteData } from './yahooFinance'
+import { YahooFinanceAdapter, type YahooDataSource } from './data-sources/yahoo-adapter'
 
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   shortMovingAverage: 50,
@@ -28,13 +28,15 @@ export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
  */
 export class StockAnalyzer {
   private config: AnalysisConfig
+  private dataSource: YahooDataSource
 
   /**
    * Creates a new stock analyzer with optional configuration
    * @param config Optional configuration for analysis parameters
    */
-  constructor(config?: Partial<AnalysisConfig>) {
+  constructor(config?: Partial<AnalysisConfig>, dataSource: YahooDataSource = new YahooFinanceAdapter()) {
     this.config = { ...DEFAULT_ANALYSIS_CONFIG, ...config }
+    this.dataSource = dataSource
   }
 
   /**
@@ -74,7 +76,7 @@ export class StockAnalyzer {
       let historical: HistoricalData[]
       try {
         historical = await executeWithRetry(
-          () => YahooFinance.historical(ticker, queryOptions),
+          () => this.dataSource.getHistorical(ticker, queryOptions),
           this.config.maxRetryAttempts,
           this.config.retryDelay,
           this.config.maxRetryDelay,
@@ -95,7 +97,7 @@ export class StockAnalyzer {
       let quote: QuoteData
       try {
         quote = await executeWithRetry(
-          () => YahooFinance.quote(ticker),
+          () => this.dataSource.getQuote(ticker),
           this.config.maxRetryAttempts,
           this.config.retryDelay,
           this.config.maxRetryDelay,

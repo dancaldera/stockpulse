@@ -3,8 +3,8 @@
  * Fetches top tickers using Yahoo Finance (free, no API keys required)
  */
 
-import * as YahooFinance from './yahooFinance'
 import { POPULAR_TICKERS } from './tickers'
+import { YahooFinanceAdapter, type YahooDataSource } from './data-sources/yahoo-adapter'
 
 export interface TickerFetcherConfig {
   strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
@@ -25,8 +25,9 @@ export interface TickerInfo {
 
 export class TickerFetcher {
   private config: TickerFetcherConfig
+  private dataSource: YahooDataSource
 
-  constructor(config: TickerFetcherConfig) {
+  constructor(config: TickerFetcherConfig, dataSource: YahooDataSource = new YahooFinanceAdapter()) {
     this.config = {
       minVolume: 1000000, // 1M minimum volume
       minPrice: 5, // Exclude penny stocks
@@ -34,6 +35,7 @@ export class TickerFetcher {
       limit: 50,
       ...config,
     }
+    this.dataSource = dataSource
   }
 
   /**
@@ -64,13 +66,7 @@ export class TickerFetcher {
    */
   private async fetchMostActive(): Promise<string[]> {
     try {
-      const tickers = await YahooFinance.trending(this.config.limit || 50)
-
-      if (tickers.length > 0) {
-        return tickers.slice(0, this.config.limit)
-      }
-
-      throw new Error('No trending tickers found')
+      return await this.dataSource.getTrendingTickers(this.config.limit)
     } catch (error) {
       console.error('Yahoo Finance trending fetch failed, using static list:', error)
       return this.fetchStatic()
@@ -82,13 +78,7 @@ export class TickerFetcher {
    */
   private async fetchGainers(): Promise<string[]> {
     try {
-      const tickers = await YahooFinance.screener('gainers', this.config.limit || 50)
-
-      if (tickers.length > 0) {
-        return tickers.slice(0, this.config.limit)
-      }
-
-      throw new Error('No gainers found')
+      return await this.dataSource.getGainers(this.config.limit)
     } catch (error) {
       console.error('Yahoo Finance gainers fetch failed, using static list:', error)
       return this.fetchStatic()
@@ -100,13 +90,7 @@ export class TickerFetcher {
    */
   private async fetchLosers(): Promise<string[]> {
     try {
-      const tickers = await YahooFinance.screener('losers', this.config.limit || 50)
-
-      if (tickers.length > 0) {
-        return tickers.slice(0, this.config.limit)
-      }
-
-      throw new Error('No losers found')
+      return await this.dataSource.getLosers(this.config.limit)
     } catch (error) {
       console.error('Yahoo Finance losers fetch failed, using static list:', error)
       return this.fetchStatic()
@@ -118,9 +102,10 @@ export class TickerFetcher {
    */
   private async fetchMixed(): Promise<string[]> {
     try {
+      const halfLimit = Math.ceil((this.config.limit || 50) / 2)
       const [trending, gainers] = await Promise.all([
-        YahooFinance.trending(Math.ceil((this.config.limit || 50) / 2)),
-        YahooFinance.screener('gainers', Math.ceil((this.config.limit || 50) / 2)),
+        this.dataSource.getTrendingTickers(halfLimit),
+        this.dataSource.getGainers(halfLimit),
       ])
 
       // Combine and deduplicate

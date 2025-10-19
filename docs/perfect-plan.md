@@ -24,7 +24,6 @@
 ### Data Quality & Adapters
 
 - Add `src/data-sources/yahoo-adapter.ts` with DTO validation and deterministic transforms.
-- Add `src/data-sources/coingecko-adapter.ts` mirroring the Yahoo shape.
 - Implement a cache abstraction (`CacheProvider`) supporting TTL, stale-while-revalidate, and metrics hooks.
 - Emit structured telemetry via `src/observability/logger.ts` for outbound calls, retries, and durations.
 
