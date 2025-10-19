@@ -1,3 +1,5 @@
+export type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 502 | 503
+
 export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'RATE_LIMIT_EXCEEDED'
@@ -7,7 +9,7 @@ export type ErrorCode =
 
 export interface ErrorOptions {
   code?: ErrorCode
-  status?: number
+  status?: ErrorStatus
   cause?: unknown
   retryAfter?: number
   details?: unknown
@@ -23,7 +25,7 @@ export interface ErrorResponseBody {
 
 export class AppError extends Error {
   code: ErrorCode
-  status: number
+  status: ErrorStatus
   retryAfter?: number
   details?: unknown
 
@@ -68,7 +70,7 @@ export class AnalysisError extends AppError {
   }
 }
 
-export function mapErrorToResponse(error: unknown): { status: number; body: ErrorResponseBody } {
+export function mapErrorToResponse(error: unknown): { status: ErrorStatus; body: ErrorResponseBody } {
   if (error instanceof AppError) {
     const { status, code, message, retryAfter, details } = error
     return {
