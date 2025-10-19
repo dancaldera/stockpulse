@@ -1068,7 +1068,6 @@ export const dashboardHTML = `<!DOCTYPE html>
                         <option value="gainers">📈 Top Gainers</option>
                         <option value="losers">📉 Top Losers</option>
                         <option value="mixed">🎯 Mixed (Active + Gainers)</option>
-                        <option value="crypto">₿ Cryptocurrencies</option>
                         <option value="static">⭐ Popular Stocks</option>
                     </select>
                     <button onclick="loadTopOpportunities()" class="refresh-button">
@@ -1188,7 +1187,6 @@ export const dashboardHTML = `<!DOCTYPE html>
                     'gainers': 'Top Gainers Today',
                     'losers': 'Top Losers Today',
                     'mixed': 'Mixed Strategy',
-                    'crypto': 'Top Cryptocurrencies',
                     'static': 'Popular Stocks'
                 };
                 infoElement.textContent = \`Showing \${total} \${strategyNames[strategy] || strategy}\`;

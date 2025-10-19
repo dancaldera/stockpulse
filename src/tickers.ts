@@ -79,34 +79,6 @@ export const POPULAR_TICKERS = [
   'SHOP',
 ]
 
-/**
- * Popular cryptocurrency tickers on Yahoo Finance
- * Format: {SYMBOL}-USD (e.g., BTC-USD)
- */
-export const CRYPTO_TICKERS = [
-  // Major cryptocurrencies by market cap
-  'BTC-USD', // Bitcoin
-  'ETH-USD', // Ethereum
-  'USDT-USD', // Tether
-  'BNB-USD', // Binance Coin
-  'SOL-USD', // Solana
-  'XRP-USD', // Ripple
-  'USDC-USD', // USD Coin
-  'ADA-USD', // Cardano
-  'DOGE-USD', // Dogecoin
-  'TRX-USD', // TRON
-  'AVAX-USD', // Avalanche
-  'DOT-USD', // Polkadot
-  'MATIC-USD', // Polygon
-  'LINK-USD', // Chainlink
-  'SHIB-USD', // Shiba Inu
-  'UNI-USD', // Uniswap
-  'LTC-USD', // Litecoin
-  'ATOM-USD', // Cosmos
-  'XLM-USD', // Stellar
-  'ALGO-USD', // Algorand
-]
-
 export const TICKER_CATEGORIES = {
   'Tech Giants': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA'],
   Tech: ['NFLX', 'AMD', 'INTC', 'ORCL', 'ADBE', 'CRM', 'CSCO'],
@@ -117,16 +89,4 @@ export const TICKER_CATEGORIES = {
   Energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG'],
   Telecom: ['T', 'VZ', 'TMUS'],
   Growth: ['PLTR', 'COIN', 'RBLX', 'SNOW', 'DKNG', 'SQ', 'SHOP'],
-  Crypto: [
-    'BTC-USD',
-    'ETH-USD',
-    'SOL-USD',
-    'XRP-USD',
-    'ADA-USD',
-    'DOGE-USD',
-    'AVAX-USD',
-    'DOT-USD',
-    'MATIC-USD',
-    'LINK-USD',
-  ],
 }

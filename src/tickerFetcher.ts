@@ -1,13 +1,13 @@
 /**
  * Dynamic ticker fetcher service
- * Fetches top tickers using Yahoo Finance and CoinGecko APIs (100% free, no API keys required)
+ * Fetches top tickers using Yahoo Finance (free, no API keys required)
  */
 
 import * as YahooFinance from './yahooFinance'
-import { POPULAR_TICKERS, CRYPTO_TICKERS } from './tickers'
+import { POPULAR_TICKERS } from './tickers'
 
 export interface TickerFetcherConfig {
-  strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static' | 'crypto'
+  strategy: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
   minVolume?: number
   minPrice?: number
   maxPrice?: number
@@ -21,12 +21,6 @@ export interface TickerInfo {
   change?: number
   changePercent?: number
   volume?: number
-}
-
-interface CoinGeckoMarket {
-  id: string
-  symbol: string
-  current_price: number
 }
 
 export class TickerFetcher {
@@ -56,8 +50,6 @@ export class TickerFetcher {
           return await this.fetchLosers()
         case 'mixed':
           return await this.fetchMixed()
-        case 'crypto':
-          return await this.fetchCrypto()
         default:
           return this.fetchStatic()
       }
@@ -141,63 +133,9 @@ export class TickerFetcher {
   }
 
   /**
-   * Fetch top cryptocurrencies from CoinGecko API (free, no key required)
-   */
-  private async fetchCrypto(): Promise<string[]> {
-    try {
-      // Fetch top cryptocurrencies by market cap from CoinGecko (free API)
-      const url =
-        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1'
-
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.status}`)
-      }
-
-      const data = (await response.json()) as CoinGeckoMarket[]
-
-      // Map CoinGecko symbols to Yahoo Finance format (SYMBOL-USD)
-      // Filter out stablecoins
-      const cryptoTickers = data
-        .filter((coin) => {
-          // Filter out stablecoins
-          const isStablecoin = ['usdt', 'usdc', 'dai', 'busd', 'tusd'].includes(coin.id.toLowerCase())
-          return !isStablecoin && coin.current_price > 0
-        })
-        .map((coin) => {
-          // Convert CoinGecko symbol to Yahoo Finance format
-          // CoinGecko: btc -> Yahoo: BTC-USD
-          return `${coin.symbol.toUpperCase()}-USD`
-        })
-        .slice(0, this.config.limit)
-
-      if (cryptoTickers.length > 0) {
-        return cryptoTickers
-      }
-
-      throw new Error('No crypto tickers found from CoinGecko')
-    } catch (error) {
-      console.error('CoinGecko fetch failed, using static crypto list:', error)
-      return this.fetchStaticCrypto()
-    }
-  }
-
-  /**
    * Fallback to static popular tickers
    */
   private fetchStatic(): string[] {
     return POPULAR_TICKERS.slice(0, this.config.limit || 50)
-  }
-
-  /**
-   * Fallback to static crypto tickers
-   */
-  private fetchStaticCrypto(): string[] {
-    return CRYPTO_TICKERS.slice(0, this.config.limit || 20)
   }
 }

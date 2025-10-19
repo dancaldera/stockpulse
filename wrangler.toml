@@ -5,8 +5,8 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
-# Ticker selection strategy: most_active, gainers, losers, mixed, crypto, or static
-# All strategies use free Yahoo Finance + CoinGecko APIs (no API keys required)
+# Ticker selection strategy: most_active, gainers, losers, mixed, or static
+# Strategies use free Yahoo Finance endpoints (no API keys required)
 TICKER_STRATEGY = "most_active"
 
 # KV namespace for stock data caching (optional but recommended)

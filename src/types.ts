@@ -62,7 +62,7 @@ export type Bindings = {
   STOCK_CACHE?: KVNamespace
   RATE_LIMITER?: DurableObjectNamespace
   ENVIRONMENT?: string
-  TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static' | 'crypto'
+  TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
 }
 
 export interface ValidationOptions {

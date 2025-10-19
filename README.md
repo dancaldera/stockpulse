@@ -1,18 +1,15 @@
-# StockPulse 📈₿
+# StockPulse 📈
 
-A high-performance **Cloudflare Workers** stock and cryptocurrency analysis API that provides real-time technical analysis and trading signals using Yahoo Finance data. Built with edge computing for ultra-fast global responses.
-
-**NEW**: Now supports cryptocurrency analysis! Analyze Bitcoin, Ethereum, and 20+ other cryptos using the same powerful technical indicators.
+A high-performance **Cloudflare Workers** stock analysis API that provides real-time technical signals using Yahoo Finance data. Built with edge computing for ultra-fast global responses.
 
 ---
 
 ## 🚀 Features
 
-✅ **Cryptocurrency Support** - Full support for BTC, ETH, XRP, and 20+ cryptos
 ✅ **Global Edge Deployment** - Runs on Cloudflare's 300+ data centers worldwide
 ✅ **Sub-50ms Response Times** - Leverages edge computing for instant analysis
-✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, losers, or top cryptos
-✅ **100% Free Data Sources** - Yahoo Finance + CoinGecko APIs with intelligent fallbacks
+✅ **Dynamic Ticker Selection** - Automatically fetches most active, gainers, losers, or curated static lists
+✅ **100% Free Data Sources** - Yahoo Finance endpoints with intelligent fallbacks
 ✅ **Comprehensive Analysis** - 12+ technical indicators + fundamentals
 ✅ **Smart Caching** - 5-minute cache for analysis, optimized for performance
 ✅ **Auto-scaling** - Handles millions of requests seamlessly
@@ -68,6 +65,14 @@ stockpulse/
 ├── tsconfig.json       # TypeScript configuration
 └── README.md           # This file
 ```
+
+## 🧭 Request Flow Overview
+
+1. Requests reach the Cloudflare Worker and enter the Hono app built via `src/http/app.ts`.
+2. Global middleware applies CORS and the Durable Object-backed rate limiter before any handlers run.
+3. Controllers in `src/http/controllers/` validate input, interact with the cache provider, and call the analyzer.
+4. The analyzer gathers data through adapters, computes indicators, and returns normalized scorecards with risk metrics.
+5. Responses are shaped through `src/errors.ts` so clients receive consistent payloads with retry hints and validation details.
 
 ---
 
@@ -126,10 +131,9 @@ The API automatically fetches market data from Yahoo Finance with intelligent fa
 - `gainers` - Top performing stocks from Yahoo screener
 - `losers` - Worst performing stocks from Yahoo screener  
 - `mixed` - Combination of trending and gainers
-- `crypto` - Top cryptocurrencies from CoinGecko API (free, no key required)
 - `static` - Predefined popular ticker list
 
-**No API keys required!** All strategies work with free Yahoo Finance and CoinGecko APIs.
+**No API keys required!** All strategies leverage free Yahoo Finance endpoints.
 
 ### Custom Domain Setup
 
@@ -196,18 +200,12 @@ curl http://localhost:8787/api/health
 GET /api/analyze/:ticker
 ```
 
-Provides comprehensive analysis for a single ticker symbol (stocks or crypto).
+Provides comprehensive analysis for a single ticker symbol available on Yahoo Finance.
 
 **Examples:**
 ```bash
 # Analyze a stock
 curl http://localhost:8787/api/analyze/AAPL
-
-# Analyze Bitcoin
-curl http://localhost:8787/api/analyze/BTC-USD
-
-# Analyze Ethereum
-curl http://localhost:8787/api/analyze/ETH-USD
 ```
 
 **Response:**
@@ -273,7 +271,6 @@ Automatically scan the market based on real-time activity. Returns top opportuni
   - `gainers`: Top performing stocks today
   - `losers`: Worst performing stocks today
   - `mixed`: Combination of actives and gainers
-  - `crypto`: Top cryptocurrencies by market cap (NEW!)
   - `static`: Predefined popular ticker list
 
 **Examples:**
@@ -283,9 +280,6 @@ curl "http://localhost:8787/api/scanner?limit=10&strategy=most_active"
 
 # Get top 25 gainers
 curl "http://localhost:8787/api/scanner?limit=25&strategy=gainers"
-
-# Get top 20 cryptocurrencies
-curl "http://localhost:8787/api/scanner?limit=20&strategy=crypto"
 ```
 
 **Response:**
@@ -316,13 +310,11 @@ curl "http://localhost:8787/api/scanner?limit=20&strategy=crypto"
 ```
 
 **How it works:**
-1. **For stocks**: Fetches from Yahoo Finance trending/screener APIs
-2. **For crypto**: Fetches top cryptos from CoinGecko API (free, no key required)
-3. Falls back to static curated lists if APIs are unavailable
-4. Filters stocks: minimum $5 price, 1M+ daily volume
-5. Filters crypto: excludes stablecoins, requires positive price
-6. Analyzes each ticker and sorts by potential gain
-7. Smart caching prevents excessive API calls
+1. Fetches from Yahoo Finance trending/screener APIs
+2. Falls back to static curated lists if APIs are unavailable
+3. Filters stocks: minimum $5 price, 1M+ daily volume
+4. Analyzes each ticker and sorts by potential gain
+5. Smart caching prevents excessive API calls
 
 **No API keys required!** All data sources are free and work out of the box.
 
@@ -334,31 +326,20 @@ POST /api/batch
 Content-Type: application/json
 ```
 
-Analyze multiple stocks and/or cryptos in a single request (max 10 tickers).
+Analyze multiple tickers in a single request (max 10).
 
 **Request Body:**
 ```json
 {
-  "tickers": ["AAPL", "MSFT", "BTC-USD", "ETH-USD"]
+  "tickers": ["AAPL", "MSFT", "GOOGL"]
 }
 ```
 
 **Examples:**
 ```bash
-# Analyze stocks
 curl -X POST http://localhost:8787/api/batch \
   -H "Content-Type: application/json" \
   -d '{"tickers": ["AAPL", "MSFT", "GOOGL"]}'
-
-# Analyze cryptocurrencies
-curl -X POST http://localhost:8787/api/batch \
-  -H "Content-Type: application/json" \
-  -d '{"tickers": ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"]}'
-
-# Mix stocks and crypto
-curl -X POST http://localhost:8787/api/batch \
-  -H "Content-Type: application/json" \
-  -d '{"tickers": ["AAPL", "BTC-USD", "TSLA", "ETH-USD"]}'
 ```
 
 **Response:**
