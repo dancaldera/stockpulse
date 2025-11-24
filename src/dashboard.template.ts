@@ -271,7 +271,23 @@ export const dashboardTemplate = () => html`
                 return \`<div style="padding: 8px; margin: 4px 0; border-radius: 6px; background: rgba(255,255,255,0.05); border-left: 3px solid \${type === 'positive' ? 'var(--success)' : type === 'negative' ? 'var(--danger)' : 'var(--warning)'}">\${reason}</div>\`;
             }).join('');
 
+            // Confidence color based on value
+            const confidenceColor = stock.confidence >= 70 ? 'var(--success)' : stock.confidence >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+            // Signal summary
+            const signalSummary = stock.signal_summary ? \`
+                <div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Signal Breakdown</div>
+                    <div style="display: flex; justify-content: center; gap: 16px;">
+                        <span style="color: var(--success);">✓ \${stock.signal_summary.bullish} Bullish</span>
+                        <span style="color: var(--danger);">✗ \${stock.signal_summary.bearish} Bearish</span>
+                        <span style="color: \${confidenceColor};">\${stock.confidence}% Confidence</span>
+                    </div>
+                </div>
+            \` : '';
+
             const metrics = \`
+                \${signalSummary}
                 <div class="grid grid-3 mb-16">
                     \${MetricCard('Target', stock.target_price, 'positive')}
                     \${MetricCard('Stop Loss', stock.stop_loss)}
@@ -348,7 +364,8 @@ export const dashboardTemplate = () => html`
                     \`;
                 }
 
-                const recommendationClass = stock.recommendation.toLowerCase().replace(' ', '-');
+                const confidenceColor = stock.confidence >= 70 ? 'var(--success)' : stock.confidence >= 50 ? 'var(--warning)' : 'var(--danger)';
+                const signalInfo = stock.signal_summary ? \`<div style="font-size: 0.75rem; color: var(--text-muted);">\${stock.signal_summary.bullish}↑ \${stock.signal_summary.bearish}↓</div>\` : '';
                 return \`
                     <div class="card" onclick="showStockDetail('\${stock.ticker}')" style="cursor: pointer; transition: transform 0.2s;">
                         <div class="flex" style="margin-bottom: 12px;">
@@ -357,6 +374,7 @@ export const dashboardTemplate = () => html`
                         </div>
                         <div style="margin-bottom: 12px;">
                             \${RecommendationBadge(stock.recommendation)}
+                            \${signalInfo}
                         </div>
                         <div class="grid grid-2">
                             <div>
@@ -365,7 +383,7 @@ export const dashboardTemplate = () => html`
                             </div>
                             <div>
                                 <div class="metric-label">Confidence</div>
-                                <div class="metric-value">\${stock.confidence}%</div>
+                                <div class="metric-value" style="color: \${confidenceColor}">\${stock.confidence}%</div>
                             </div>
                         </div>
                     </div>

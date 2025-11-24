@@ -130,7 +130,7 @@ export class StockAnalyzer {
       // Calculate weighted confidence score with fallback
       let confidence: number
       try {
-        confidence = this.calculateConfidenceScore(metrics, bullishCount, bearishCount)
+        confidence = this.calculateConfidenceScore(metrics, bullishCount, bearishCount, score)
         console.log(`[DEBUG] Confidence calculated: ${confidence}, bullish: ${bullishCount}, bearish: ${bearishCount}`)
       } catch (error) {
         console.error(`[ERROR] Confidence calculation failed:`, error)
@@ -156,6 +156,11 @@ export class StockAnalyzer {
         metrics,
         chartData,
         timestamp: new Date().toISOString(),
+        signal_summary: {
+          bullish: bullishCount,
+          bearish: bearishCount,
+          total: 7,
+        },
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred'
@@ -254,33 +259,36 @@ export class StockAnalyzer {
     }
 
     // 2. RSI - Balanced scoring with trend consideration
+    const isStrongUptrend = metrics.trend_strength > 0.7
+    const isStrongDowntrend = metrics.trend_strength < -0.7
+
     if (metrics.rsi < this.config.rsiOversold) {
-      score += 12 // Reduced from 15
+      // Oversold in downtrend is less bullish (could keep falling)
+      const rsiScore = isStrongDowntrend ? 8 : 12
+      score += rsiScore
       bullishCount++
       reasons.push(`✓ RSI oversold at ${metrics.rsi.toFixed(1)} (potential bounce)`)
-      // EXTREME oversold gets additional boost
       if (metrics.rsi < 25) {
         score += 3
         warnings.push(`⚠ EXTREME oversold (RSI: ${metrics.rsi.toFixed(1)}) - high risk/reward`)
       }
     } else if (metrics.rsi > this.config.rsiOverbought) {
-      score -= 12 // Reduced from 15
-      bearishCount++
+      // Overbought in strong uptrend is less bearish (momentum)
+      const rsiPenalty = isStrongUptrend ? 6 : 12
+      score -= rsiPenalty
+      if (!isStrongUptrend) bearishCount++
       reasons.push(`✗ RSI overbought at ${metrics.rsi.toFixed(1)} (potential pullback)`)
-      // EXTREME overbought is a stronger warning
       if (metrics.rsi > 75) {
-        score -= 3 // Reduced from 5
-        warnings.push(`⚠ EXTREME overbought (RSI: ${metrics.rsi.toFixed(1)})`)
+        const extremePenalty = isStrongUptrend ? 0 : 3
+        score -= extremePenalty
+        warnings.push(`⚠ ${isStrongUptrend ? 'Overbought but in strong uptrend' : 'EXTREME overbought'} (RSI: ${metrics.rsi.toFixed(1)})`)
       }
     } else if (metrics.rsi >= 45 && metrics.rsi <= 65) {
-      // Healthy RSI range - slightly bullish
-      score += 3 // Reduced from 5
+      score += 3
       reasons.push(`✓ RSI healthy at ${metrics.rsi.toFixed(1)} (neutral to bullish)`)
     } else if (metrics.rsi >= 35 && metrics.rsi < 45) {
-      // Slightly bearish but not oversold
       reasons.push(`○ RSI slightly weak at ${metrics.rsi.toFixed(1)}`)
     } else if (metrics.rsi > 65 && metrics.rsi <= 70) {
-      // Slightly overbought but not extreme
       reasons.push(`○ RSI slightly strong at ${metrics.rsi.toFixed(1)}`)
     }
 
@@ -329,6 +337,7 @@ export class StockAnalyzer {
     // 5. Bollinger Bands - More sophisticated analysis
     if (metrics.bb_position < 0.2) {
       score += 10
+      bullishCount++
       reasons.push('✓ Near lower Bollinger Band (oversold)')
       // Extra boost if VERY close to lower band
       if (metrics.bb_position < 0.05) {
@@ -337,6 +346,7 @@ export class StockAnalyzer {
       }
     } else if (metrics.bb_position > 0.8) {
       score -= 10
+      bearishCount++
       reasons.push('✗ Near upper Bollinger Band (overbought)')
       // Extra penalty if VERY close to upper band
       if (metrics.bb_position > 0.95) {
@@ -388,18 +398,18 @@ export class StockAnalyzer {
       warnings.push(`⚠ Extended below SMA200 (${distanceFromSma200.toFixed(1)}%) - oversold`)
     }
 
-    // 9. Fundamentals (slight adjustment)
-    if (metrics.pe_ratio && metrics.forward_pe) {
+    // 9. Fundamentals (with null safety)
+    if (metrics.pe_ratio != null && metrics.pe_ratio > 0 && metrics.forward_pe != null && metrics.forward_pe > 0) {
       if (metrics.forward_pe < 15 && metrics.pe_ratio < 25) {
         score += 10
-        reasons.push(`✓ Attractive valuation (P/E: ${metrics.pe_ratio.toFixed(1)})`)
+        reasons.push(`✓ Attractive valuation (P/E: ${metrics.pe_ratio.toFixed(1)}, Fwd P/E: ${metrics.forward_pe.toFixed(1)})`)
       } else if (metrics.pe_ratio > 40) {
         score -= 5
         reasons.push(`⚠ High valuation (P/E: ${metrics.pe_ratio.toFixed(1)})`)
       }
     }
 
-    if (metrics.peg_ratio && metrics.peg_ratio < 1) {
+    if (metrics.peg_ratio != null && metrics.peg_ratio > 0 && metrics.peg_ratio < 1) {
       score += 5
       reasons.push(`✓ Excellent PEG ratio: ${metrics.peg_ratio.toFixed(2)}`)
     }
@@ -426,15 +436,15 @@ export class StockAnalyzer {
     }
 
     // 11. MULTI-INDICATOR CONFIRMATION - Reduced penalty
-    // For BUY: need at least 3 of 4 key indicators bullish
-    // For SELL: need at least 3 of 4 key indicators bearish
-    if (score > 30 && bullishCount < 3) {
-      score -= 5 // Reduced from -10
-      warnings.push('⚠ Bullish score lacks confirmation (fewer than 3 bullish indicators)')
+    // For BUY: need at least 4 of 7 key indicators bullish
+    // For SELL: need at least 4 of 7 key indicators bearish
+    if (score > 30 && bullishCount < 4) {
+      score -= 5
+      warnings.push(`⚠ Bullish score lacks confirmation (${bullishCount}/7 bullish indicators)`)
     }
-    if (score < -30 && bearishCount < 3) {
-      score += 5 // Reduced from 10
-      warnings.push('⚠ Bearish score lacks confirmation (fewer than 3 bearish indicators)')
+    if (score < -30 && bearishCount < 4) {
+      score += 5
+      warnings.push(`⚠ Bearish score lacks confirmation (${bearishCount}/7 bearish indicators)`)
     }
 
     // Combine all reasons and warnings
@@ -460,13 +470,31 @@ export class StockAnalyzer {
    * Calculate weighted confidence score based on indicator strength
    * Returns a percentage (0-100) representing how confident we are in the signal
    */
-  private calculateConfidenceScore(_metrics: StockMetrics, bullishCount: number, bearishCount: number): number {
-    // Simple confidence based on indicator agreement
-    const agreement = Math.max(bullishCount, bearishCount)
-    const baseConfidence = 50 + agreement * 5
+  private calculateConfidenceScore(_metrics: StockMetrics, bullishCount: number, bearishCount: number, score: number): number {
+    const total = bullishCount + bearishCount
+    if (total === 0) return 50
+
+    // Calculate agreement ratio - how many indicators align with the direction
+    const dominant = Math.max(bullishCount, bearishCount)
+    const agreementRatio = dominant / total
+
+    // Base confidence from agreement (50-80 range)
+    let confidence = 50 + agreementRatio * 30
+
+    // Boost confidence if score is decisive (strong signal)
+    const absScore = Math.abs(score)
+    if (absScore >= 35) {
+      confidence += 15 // Strong Buy/Sell
+    } else if (absScore >= 20) {
+      confidence += 8 // Buy/Sell
+    }
+
+    // Penalize conflicting signals
+    const conflictPenalty = Math.min(bullishCount, bearishCount) * 3
+    confidence -= conflictPenalty
 
     // Clamp to 0-100 range
-    return Math.max(0, Math.min(100, baseConfidence))
+    return Math.max(0, Math.min(100, Math.round(confidence)))
   }
 
   private calculateTargets(
@@ -474,7 +502,8 @@ export class StockAnalyzer {
     metrics: StockMetrics,
     recommendation: string,
   ): { target: number; stopLoss: number } {
-    const atr = metrics.atr
+    // Use ATR or fallback to 2% of price if ATR is invalid
+    const atr = metrics.atr && metrics.atr > 0 ? metrics.atr : currentPrice * 0.02
 
     if (recommendation === 'STRONG BUY' || recommendation === 'BUY') {
       return {
