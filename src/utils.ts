@@ -303,6 +303,124 @@ export function trendStrength(prices: number[]): number {
 }
 
 /**
+ * Calculate ADX (Average Directional Index) for trend strength
+ * Returns value 0-100: <20 weak, 20-40 moderate, >40 strong trend
+ */
+export function adx(high: number[], low: number[], close: number[], period: number = 14): number {
+  if (high.length < period + 1) return 0
+
+  const plusDM: number[] = []
+  const minusDM: number[] = []
+  const tr: number[] = []
+
+  // Calculate +DM, -DM, and True Range
+  for (let i = 1; i < high.length; i++) {
+    const upMove = high[i] - high[i - 1]
+    const downMove = low[i - 1] - low[i]
+
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0)
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0)
+
+    const tr1 = high[i] - low[i]
+    const tr2 = Math.abs(high[i] - close[i - 1])
+    const tr3 = Math.abs(low[i] - close[i - 1])
+    tr.push(Math.max(tr1, tr2, tr3))
+  }
+
+  // Smooth with EMA
+  const smoothPlusDM = ema(plusDM, period)
+  const smoothMinusDM = ema(minusDM, period)
+  const smoothTR = ema(tr, period)
+
+  if (smoothTR.length === 0) return 0
+
+  // Calculate +DI and -DI
+  const plusDI: number[] = []
+  const minusDI: number[] = []
+
+  for (let i = 0; i < smoothTR.length; i++) {
+    const trVal = smoothTR[i]
+    if (trVal === 0) {
+      plusDI.push(0)
+      minusDI.push(0)
+    } else {
+      plusDI.push((smoothPlusDM[i] / trVal) * 100)
+      minusDI.push((smoothMinusDM[i] / trVal) * 100)
+    }
+  }
+
+  // Calculate DX
+  const dx: number[] = []
+  for (let i = 0; i < plusDI.length; i++) {
+    const sum = plusDI[i] + minusDI[i]
+    if (sum === 0) {
+      dx.push(0)
+    } else {
+      dx.push((Math.abs(plusDI[i] - minusDI[i]) / sum) * 100)
+    }
+  }
+
+  // ADX is smoothed DX
+  const adxValues = ema(dx, period)
+  return adxValues.length > 0 ? adxValues[adxValues.length - 1] : 0
+}
+
+/**
+ * Detect RSI divergence (price makes new high/low but RSI doesn't)
+ * Returns: 'bullish' (price lower low, RSI higher low), 'bearish' (price higher high, RSI lower high), or null
+ */
+export function detectDivergence(
+  prices: number[],
+  rsiValues: number[],
+  lookback: number = 10,
+): 'bullish' | 'bearish' | null {
+  if (prices.length < lookback || rsiValues.length < lookback) return null
+
+  const recentPrices = prices.slice(-lookback)
+  const recentRSI = rsiValues.slice(-lookback)
+
+  // Find local highs and lows
+  const priceHigh1 = Math.max(...recentPrices.slice(0, Math.floor(lookback / 2)))
+  const priceHigh2 = Math.max(...recentPrices.slice(Math.floor(lookback / 2)))
+  const priceLow1 = Math.min(...recentPrices.slice(0, Math.floor(lookback / 2)))
+  const priceLow2 = Math.min(...recentPrices.slice(Math.floor(lookback / 2)))
+
+  const rsiHigh1 = Math.max(...recentRSI.slice(0, Math.floor(lookback / 2)))
+  const rsiHigh2 = Math.max(...recentRSI.slice(Math.floor(lookback / 2)))
+  const rsiLow1 = Math.min(...recentRSI.slice(0, Math.floor(lookback / 2)))
+  const rsiLow2 = Math.min(...recentRSI.slice(Math.floor(lookback / 2)))
+
+  // Bearish divergence: price makes higher high, RSI makes lower high
+  if (priceHigh2 > priceHigh1 && rsiHigh2 < rsiHigh1) {
+    return 'bearish'
+  }
+
+  // Bullish divergence: price makes lower low, RSI makes higher low
+  if (priceLow2 < priceLow1 && rsiLow2 > rsiLow1) {
+    return 'bullish'
+  }
+
+  return null
+}
+
+/**
+ * Find recent support and resistance levels
+ */
+export function findSupportResistance(
+  highs: number[],
+  lows: number[],
+  lookback: number = 20,
+): { support: number; resistance: number } {
+  const recentHighs = highs.slice(-lookback)
+  const recentLows = lows.slice(-lookback)
+
+  return {
+    support: Math.min(...recentLows),
+    resistance: Math.max(...recentHighs),
+  }
+}
+
+/**
  * Cache utilities with tiered TTL strategy
  */
 export class CacheManager {

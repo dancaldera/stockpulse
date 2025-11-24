@@ -1,6 +1,6 @@
 import { html } from 'hono/html'
 import { getStyles } from './styles/dashboard.css'
-import { Header, SearchForm, RecommendationBadge, MetricCard, ChartContainer } from './components/dashboard.components'
+import { Header, SearchForm, RecommendationBadge, MetricCard, ChartContainer, Footer } from './components/dashboard.components'
 
 // Main dashboard template
 export const dashboardTemplate = () => html`
@@ -19,6 +19,7 @@ export const dashboardTemplate = () => html`
         ${SearchForm()}
         <div id="results"></div>
     </div>
+    ${Footer()}
 
     <script>
         const API_BASE = window.location.origin;
@@ -73,15 +74,22 @@ export const dashboardTemplate = () => html`
             }
         }
 
-        async function analyzeSingle(ticker) {
+        async function analyzeSingle(ticker, forceRefresh = false) {
             showLoading();
             try {
-                const res = await fetch(\`\${API_BASE}/api/analyze/\${ticker}\`);
+                const url = forceRefresh
+                    ? \`\${API_BASE}/api/analyze/\${ticker}?refresh=true\`
+                    : \`\${API_BASE}/api/analyze/\${ticker}\`;
+                const res = await fetch(url);
                 const data = await res.json();
                 data.success ? displaySingleResult(data.data, data.cached) : showError(data.error);
             } catch (e) {
                 showError('Network error: ' + e.message);
             }
+        }
+
+        async function refreshStock(ticker) {
+            await analyzeSingle(ticker, true);
         }
 
         async function analyzeMultiple(tickers) {
@@ -350,7 +358,13 @@ export const dashboardTemplate = () => html`
                     \${charts}
 
                     <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 16px;">
-                        \${cached ? '📦 Cached • ' : ''}\${new Date(stock.timestamp).toLocaleString()}
+                        \${(() => {
+                            const dataAge = Math.round((Date.now() - new Date(stock.timestamp).getTime()) / 60000);
+                            const ageText = dataAge < 1 ? 'Just now' : dataAge < 60 ? \`\${dataAge}m ago\` : \`\${Math.round(dataAge/60)}h ago\`;
+                            return cached
+                                ? \`📦 Cached (\${ageText}) <button onclick="refreshStock('\${stock.ticker}')" style="background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline;">Refresh</button>\`
+                                : \`Updated \${ageText}\`;
+                        })()}
                     </div>
                 </div>
             \`;

@@ -62,10 +62,20 @@ export const getStyles = () => html`
     font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 8px;
-    background: linear-gradient(135deg, var(--primary), #a855f7);
+    background: linear-gradient(90deg, #00f5ff, #6366f1, #a855f7, #f472b6, #00f5ff);
+    background-size: 300% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    animation: gradient-shift 4s ease infinite;
+    text-shadow: 0 0 30px rgba(99, 102, 241, 0.5), 0 0 60px rgba(168, 85, 247, 0.3);
+    filter: drop-shadow(0 0 20px rgba(0, 245, 255, 0.4));
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   .header p {
@@ -299,6 +309,81 @@ export const getStyles = () => html`
     .chart-canvas {
       height: 240px;
     }
+  }
+
+  .footer {
+    margin-top: 40px;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  .footer-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--success);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  }
+
+  .footer-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .footer-separator {
+    opacity: 0.5;
+  }
+
+  .footer-info a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-info a:hover {
+    color: #a855f7;
+  }
+
+  .footer-credits {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .footer-credits a {
+    color: var(--primary);
+    text-decoration: none;
+  }
+
+  .footer-credits a:hover {
+    text-decoration: underline;
   }
 </style>
 `

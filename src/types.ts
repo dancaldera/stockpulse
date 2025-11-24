@@ -50,6 +50,10 @@ export interface StockMetrics {
   volume_ratio: number
   atr: number
   trend_strength: number
+  adx: number
+  divergence: 'bullish' | 'bearish' | null
+  support: number
+  resistance: number
   pe_ratio?: number
   forward_pe?: number
   peg_ratio?: number

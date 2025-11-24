@@ -1,5 +1,17 @@
 import type { StockSignal, StockMetrics, AnalysisConfig, ChartData } from './types'
-import { sma, ema, rsi, macd, bollingerBands, atr, trendStrength, executeWithRetry } from './utils'
+import {
+  sma,
+  ema,
+  rsi,
+  macd,
+  bollingerBands,
+  atr,
+  trendStrength,
+  adx,
+  detectDivergence,
+  findSupportResistance,
+  executeWithRetry,
+} from './utils'
 import type { HistoricalData, QuoteData } from './yahooFinance'
 import { YahooFinanceAdapter, type YahooDataSource } from './data-sources/yahoo-adapter'
 
@@ -205,6 +217,19 @@ export class StockAnalyzer {
     // Trend strength
     const trendStrengthValue = trendStrength(closes.slice(-this.config.shortMovingAverage))
 
+    // ADX for trend strength
+    const adxValue = adx(highs, lows, closes, this.config.rsiPeriod)
+
+    // Calculate RSI array for divergence detection
+    const rsiArray: number[] = []
+    for (let i = this.config.rsiPeriod; i < closes.length; i++) {
+      rsiArray.push(rsi(closes.slice(0, i + 1), this.config.rsiPeriod))
+    }
+    const divergence = detectDivergence(closes.slice(-20), rsiArray.slice(-20), 10)
+
+    // Support and resistance
+    const { support, resistance } = findSupportResistance(highs, lows, 20)
+
     // Price change
     const priceChange50d =
       ((currentPrice - closes[closes.length - this.config.shortMovingAverage]) /
@@ -224,6 +249,10 @@ export class StockAnalyzer {
       volume_ratio: volumeRatio,
       atr: atrValue,
       trend_strength: trendStrengthValue,
+      adx: adxValue,
+      divergence,
+      support,
+      resistance,
       pe_ratio: quote.trailingPE,
       forward_pe: quote.forwardPE,
       peg_ratio: quote.trailingPegRatio,
@@ -281,7 +310,9 @@ export class StockAnalyzer {
       if (metrics.rsi > 75) {
         const extremePenalty = isStrongUptrend ? 0 : 3
         score -= extremePenalty
-        warnings.push(`⚠ ${isStrongUptrend ? 'Overbought but in strong uptrend' : 'EXTREME overbought'} (RSI: ${metrics.rsi.toFixed(1)})`)
+        warnings.push(
+          `⚠ ${isStrongUptrend ? 'Overbought but in strong uptrend' : 'EXTREME overbought'} (RSI: ${metrics.rsi.toFixed(1)})`,
+        )
       }
     } else if (metrics.rsi >= 45 && metrics.rsi <= 65) {
       score += 3
@@ -355,25 +386,56 @@ export class StockAnalyzer {
       }
     }
 
-    // 6. Volume (Supporting indicator - not blocking)
+    // 6. Volume-Price Confirmation (improved)
+    const priceDirection = metrics.current_price > metrics.ema_20 ? 'up' : 'down'
     if (metrics.volume_ratio > 1.5) {
-      score += 10
-      reasons.push(`✓ High volume (${metrics.volume_ratio.toFixed(1)}x average) - strong interest`)
-      // Very high volume is even more significant
+      if (priceDirection === 'up') {
+        score += 12
+        bullishCount++
+        reasons.push(`✓ High volume (${metrics.volume_ratio.toFixed(1)}x) with price rising - strong buying`)
+      } else {
+        score -= 12
+        bearishCount++
+        reasons.push(`✗ High volume (${metrics.volume_ratio.toFixed(1)}x) with price falling - strong selling`)
+      }
       if (metrics.volume_ratio > 2.5) {
-        score += 5
-        warnings.push(`⚠ VERY high volume (${metrics.volume_ratio.toFixed(1)}x) - major move`)
+        warnings.push(`⚠ VERY high volume (${metrics.volume_ratio.toFixed(1)}x) - major institutional activity`)
       }
     } else if (metrics.volume_ratio < 0.5) {
-      score -= 5 // Reduced penalty - volume is supporting, not core
+      score -= 3
       reasons.push(`✗ Low volume (${metrics.volume_ratio.toFixed(1)}x average) - weak conviction`)
-      // Extremely low volume warning only, no additional penalty
-      if (metrics.volume_ratio < 0.3) {
-        warnings.push(`⚠ EXTREMELY low volume (${metrics.volume_ratio.toFixed(1)}x) - no interest`)
-      }
     }
 
-    // 7. Trend Strength (INCREASED from 10 to 15)
+    // 7. Market Regime Detection (ADX-based)
+    const isTrending = metrics.adx > 25
+    const isStrongTrend = metrics.adx > 40
+
+    if (isStrongTrend) {
+      // In strong trends, trust momentum indicators more
+      if (metrics.trend_strength > 0) {
+        score += 10
+        reasons.push(`✓ Strong trend (ADX: ${metrics.adx.toFixed(0)}) - momentum favored`)
+      } else {
+        score -= 10
+        reasons.push(`✗ Strong downtrend (ADX: ${metrics.adx.toFixed(0)}) - momentum against`)
+      }
+    } else if (!isTrending) {
+      // In ranging markets, mean-reversion works better
+      warnings.push(`⚠ Ranging market (ADX: ${metrics.adx.toFixed(0)}) - mean-reversion favored`)
+    }
+
+    // 8. Divergence Detection
+    if (metrics.divergence === 'bullish') {
+      score += 15
+      bullishCount++
+      reasons.push('✓ Bullish RSI divergence - potential reversal up')
+    } else if (metrics.divergence === 'bearish') {
+      score -= 15
+      bearishCount++
+      reasons.push('✗ Bearish RSI divergence - potential reversal down')
+    }
+
+    // 9. Trend Strength (legacy)
     const strongTrendThreshold = 0.7
     if (metrics.trend_strength > strongTrendThreshold) {
       score += 15
@@ -383,9 +445,6 @@ export class StockAnalyzer {
       score -= 15
       bearishCount++
       reasons.push(`✗ Strong downtrend (strength: ${metrics.trend_strength.toFixed(2)})`)
-    } else if (Math.abs(metrics.trend_strength) < 0.3) {
-      // Ranging market - neutral, no penalty (ranging markets are normal)
-      warnings.push('⚠ Weak/ranging market - choppy conditions')
     }
 
     // 8. Extended Move Detection - Reduced penalty
@@ -402,7 +461,9 @@ export class StockAnalyzer {
     if (metrics.pe_ratio != null && metrics.pe_ratio > 0 && metrics.forward_pe != null && metrics.forward_pe > 0) {
       if (metrics.forward_pe < 15 && metrics.pe_ratio < 25) {
         score += 10
-        reasons.push(`✓ Attractive valuation (P/E: ${metrics.pe_ratio.toFixed(1)}, Fwd P/E: ${metrics.forward_pe.toFixed(1)})`)
+        reasons.push(
+          `✓ Attractive valuation (P/E: ${metrics.pe_ratio.toFixed(1)}, Fwd P/E: ${metrics.forward_pe.toFixed(1)})`,
+        )
       } else if (metrics.pe_ratio > 40) {
         score -= 5
         reasons.push(`⚠ High valuation (P/E: ${metrics.pe_ratio.toFixed(1)})`)
@@ -470,7 +531,12 @@ export class StockAnalyzer {
    * Calculate weighted confidence score based on indicator strength
    * Returns a percentage (0-100) representing how confident we are in the signal
    */
-  private calculateConfidenceScore(_metrics: StockMetrics, bullishCount: number, bearishCount: number, score: number): number {
+  private calculateConfidenceScore(
+    _metrics: StockMetrics,
+    bullishCount: number,
+    bearishCount: number,
+    score: number,
+  ): number {
     const total = bullishCount + bearishCount
     if (total === 0) return 50
 
@@ -503,22 +569,44 @@ export class StockAnalyzer {
     recommendation: string,
   ): { target: number; stopLoss: number } {
     // Use ATR or fallback to 2% of price if ATR is invalid
-    const atr = metrics.atr && metrics.atr > 0 ? metrics.atr : currentPrice * 0.02
+    const atrValue = metrics.atr && metrics.atr > 0 ? metrics.atr : currentPrice * 0.02
 
     if (recommendation === 'STRONG BUY' || recommendation === 'BUY') {
-      return {
-        target: currentPrice + 2 * atr,
-        stopLoss: currentPrice - 1.5 * atr,
-      }
+      // Target: use resistance level if within reasonable ATR range, else ATR-based
+      const atrTarget = currentPrice + 2 * atrValue
+      const target =
+        metrics.resistance > currentPrice && metrics.resistance < atrTarget * 1.5
+          ? Math.max(metrics.resistance, atrTarget * 0.8) // At least 80% of ATR target
+          : atrTarget
+
+      // Stop: use support level if within reasonable ATR range
+      const atrStop = currentPrice - 1.5 * atrValue
+      const stopLoss =
+        metrics.support < currentPrice && metrics.support > atrStop * 0.8
+          ? Math.min(metrics.support * 0.98, atrStop) // Slightly below support
+          : atrStop
+
+      return { target, stopLoss }
     } else if (recommendation === 'STRONG SELL' || recommendation === 'SELL') {
-      return {
-        target: currentPrice - 2 * atr,
-        stopLoss: currentPrice + 1.5 * atr,
-      }
+      // Target: use support level for downside target
+      const atrTarget = currentPrice - 2 * atrValue
+      const target =
+        metrics.support < currentPrice && metrics.support > atrTarget * 0.5
+          ? Math.min(metrics.support, atrTarget * 1.2)
+          : atrTarget
+
+      // Stop: use resistance for upside protection
+      const atrStop = currentPrice + 1.5 * atrValue
+      const stopLoss =
+        metrics.resistance > currentPrice && metrics.resistance < atrStop * 1.2
+          ? Math.max(metrics.resistance * 1.02, atrStop)
+          : atrStop
+
+      return { target, stopLoss }
     } else {
       return {
-        target: currentPrice + 1 * atr,
-        stopLoss: currentPrice - 1 * atr,
+        target: currentPrice + 1 * atrValue,
+        stopLoss: currentPrice - 1 * atrValue,
       }
     }
   }

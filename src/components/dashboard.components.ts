@@ -79,3 +79,24 @@ export const ChartContainer = (title: string, canvasId: string) => html`
     </div>
   </div>
 `
+
+export const Footer = () => html`
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-status">
+        <span class="status-dot"></span>
+        <span>Always Online</span>
+      </div>
+      <div class="footer-info">
+        <span>© 2025 StockPulse</span>
+        <span class="footer-separator">•</span>
+        <a href="https://github.com/dancaldera" target="_blank" rel="noopener">Open Source</a>
+        <span class="footer-separator">•</span>
+        <span>Powered by Yahoo Finance</span>
+      </div>
+      <div class="footer-credits">
+        Built with ❤️ by <a href="https://github.com/dancaldera" target="_blank" rel="noopener">@dancaldera</a>
+      </div>
+    </div>
+  </footer>
+`
