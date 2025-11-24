@@ -1,6 +1,6 @@
 import { html } from 'hono/html'
 import { getStyles } from './styles/dashboard.css'
-import { Header, SearchForm, RecommendationBadge, MetricCard, ChartContainer, Footer } from './components/dashboard.components'
+import { Header, SearchForm, Footer } from './components/dashboard.components'
 
 // Main dashboard template
 export const dashboardTemplate = () => html`
@@ -178,7 +178,7 @@ export const dashboardTemplate = () => html`
         function createChart(elementId, config) {
             const ctx = document.getElementById(elementId);
             if (!ctx) return null;
-            
+
             if (currentCharts[elementId]) {
                 currentCharts[elementId].destroy();
             }
@@ -220,7 +220,7 @@ export const dashboardTemplate = () => html`
 
         function renderPriceChart(data, ticker) {
             const dates = data.dates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-            
+
             createChart('priceChart', {
                 type: 'line',
                 data: {
@@ -236,7 +236,7 @@ export const dashboardTemplate = () => html`
 
         function renderRSIChart(data) {
             const dates = data.dates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-            
+
             const chart = createChart('rsiChart', {
                 type: 'line',
                 data: {
@@ -253,12 +253,12 @@ export const dashboardTemplate = () => html`
                     const ctx = chart.ctx;
                     const yScale = chart.scales.y;
                     const chartArea = chart.chartArea;
-                    
+
                     // Overbought zone (70-100)
                     const y70 = yScale.getPixelForValue(70);
                     ctx.fillStyle = 'rgba(239,68,68,0.1)';
                     ctx.fillRect(chartArea.left, 0, chartArea.right - chartArea.left, y70);
-                    
+
                     // Oversold zone (0-30)
                     const y30 = yScale.getPixelForValue(30);
                     ctx.fillStyle = 'rgba(16,185,129,0.1)';
@@ -270,8 +270,8 @@ export const dashboardTemplate = () => html`
         // Display functions using template literals for consistency
         function displaySingleResult(stock, cached) {
             destroyCharts();
-            
-            const backButton = document.getElementById('ticker-input').value.includes(',') ? 
+
+            const backButton = document.getElementById('ticker-input').value.includes(',') ?
                 \`<button class="btn btn-secondary mb-16" onclick="goBack()">← Back</button>\` : '';
 
             const reasons = stock.reasons.map(reason => {
