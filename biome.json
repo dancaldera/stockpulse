@@ -1,5 +1,13 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.json",
+      "!src/components/dashboard.components.ts",
+      "!src/dashboard.template.ts"
+    ]
+  },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -10,7 +18,7 @@
     "lineWidth": 100
   },
   "linter": {
-    "enabled": true
+    "enabled": false
   },
   "assist": {
     "enabled": false

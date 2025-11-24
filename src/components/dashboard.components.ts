@@ -1,0 +1,81 @@
+import { html } from 'hono/html'
+
+// Component functions for better maintainability
+export const Header = () => html`
+  <div class="header">
+    <h1>StockPulse</h1>
+    <p>Real-time Stock Analysis</p>
+  </div>
+`
+
+export const SearchForm = () => html`
+  <div class="card">
+    <div class="input-group">
+      <input 
+        type="text" 
+        id="ticker-input" 
+        placeholder="Enter tickers (AAPL or AAPL, MSFT, GOOGL)"
+        onkeypress="handleKeyPress(event)"
+      >
+      <button class="btn btn-primary" onclick="analyzeStocks()">Search</button>
+    </div>
+    
+    <div class="flex mt-16">
+      <div>
+        <label style="color: var(--text-muted); font-size: 0.9rem;">
+          Market Scanner:
+        </label>
+        <select id="strategy-selector" onchange="loadTopOpportunities()" style="margin-left: 8px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
+          <option value="most_active">🔥 Most Active</option>
+          <option value="gainers">📈 Top Gainers</option>
+          <option value="losers">📉 Top Losers</option>
+          <option value="mixed">🎯 Mixed</option>
+          <option value="static">⭐ Popular</option>
+        </select>
+      </div>
+      <div>
+        <button class="btn btn-secondary" onclick="loadTopOpportunities()">🔄 Refresh</button>
+        <span id="strategy-info" style="margin-left: 8px; color: var(--text-muted); font-size: 0.8rem;"></span>
+      </div>
+    </div>
+  </div>
+`
+
+export const LoadingComponent = () => html`
+  <div class="card">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Analyzing...</p>
+    </div>
+  </div>
+`
+
+export const ErrorComponent = (message: string) => html`
+  <div class="card">
+    <div class="error">${message}</div>
+  </div>
+`
+
+export const RecommendationBadge = (recommendation: string) => {
+  const recommendationClass = recommendation.toLowerCase()
+    .replace(/\s+/g, '-')  // Replace spaces with hyphens
+    .replace(/[^a-z0-9-]/g, '');  // Remove any special characters
+  
+  return html`<span class="recommendation ${recommendationClass}">${recommendation}</span>`
+}
+
+export const MetricCard = (label: string, value: string, className?: string) => html`
+  <div class="metric">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value ${className || ''}">${value}</div>
+  </div>
+`
+
+export const ChartContainer = (title: string, canvasId: string) => html`
+  <div class="chart-container">
+    <div class="chart-title">${title}</div>
+    <div class="chart-canvas">
+      <canvas id="${canvasId}"></canvas>
+    </div>
+  </div>
+`
