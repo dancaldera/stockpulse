@@ -10,6 +10,8 @@ import { createBatchHandler } from './controllers/batch'
 import { createScannerGetHandler, createScannerPostHandler } from './controllers/scanner'
 import type { TickerFetcher, TickerFetcherConfig } from '../tickerFetcher'
 import { mapErrorToResponse } from '../errors'
+import { createSignalsRouter } from './signals'
+import { createSignalsDashboardHandler } from './controllers/signals-dashboard'
 
 export interface AppDependencies {
   analyzer: StockAnalyzer
@@ -53,12 +55,16 @@ export function createApp(deps: AppDependencies) {
     }),
   }
 
+  const signalsDashboardHandler = createSignalsDashboardHandler()
+
   app.get('/', dashboardHandler)
+  app.get('/signals', signalsDashboardHandler)
   app.get('/api/health', healthHandler)
   app.get('/api/analyze/:ticker', analyzeHandler)
   app.post('/api/batch', batchHandler)
   app.get('/api/scanner', scannerHandlers.get)
   app.post('/api/scanner', scannerHandlers.post)
+  app.route('/api/signals', createSignalsRouter())
 
   return app
 }

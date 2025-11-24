@@ -26,6 +26,16 @@ class_name = "RateLimiter"
 tag = "v1"
 new_sqlite_classes = ["RateLimiter"]
 
+# D1 Database for signal history
+[[d1_databases]]
+binding = "DB"
+database_name = "stockpulse-signals"
+database_id = "fe8ef8f0-01ba-4e59-b328-7ebac23d143f"
+
+# Cron trigger - daily at 4pm ET (21:00 UTC) on weekdays
+[triggers]
+crons = ["0 21 * * 1-5"]
+
 # For production
 # [env.production]
 # route = "api.yourdomain.com/*"

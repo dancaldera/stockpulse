@@ -3,8 +3,13 @@ import { html } from 'hono/html'
 // Component functions for better maintainability
 export const Header = () => html`
   <div class="header">
-    <h1>StockPulse</h1>
-    <p>Real-time Stock Analysis</p>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1>StockPulse</h1>
+        <p>Real-time Stock Analysis</p>
+      </div>
+      <a href="/signals" style="background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500;">📊 Signal History</a>
+    </div>
   </div>
 `
 

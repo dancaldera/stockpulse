@@ -70,6 +70,7 @@ export interface StockMetrics {
 export type Bindings = {
   STOCK_CACHE?: KVNamespace
   RATE_LIMITER?: DurableObjectNamespace
+  DB?: D1Database
   ENVIRONMENT?: string
   TICKER_STRATEGY?: 'most_active' | 'gainers' | 'losers' | 'mixed' | 'static'
 }
