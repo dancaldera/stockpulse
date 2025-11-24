@@ -143,16 +143,20 @@ export class StockAnalyzer {
       let confidence: number
       try {
         confidence = this.calculateConfidenceScore(metrics, bullishCount, bearishCount, score)
-        console.log(`[DEBUG] Confidence calculated: ${confidence}, bullish: ${bullishCount}, bearish: ${bearishCount}`)
-      } catch (error) {
-        console.error(`[ERROR] Confidence calculation failed:`, error)
+      } catch (_error) {
         // Fallback to absolute score if confidence calculation fails
         confidence = Math.min(Math.abs(score), 100)
       }
 
       // Calculate targets
       const currentPrice = closes[closes.length - 1]
+      if (!currentPrice || currentPrice <= 0) {
+        throw new Error(`Invalid price data for ${ticker}`)
+      }
       const { target, stopLoss } = this.calculateTargets(currentPrice, metrics, recommendation)
+
+      const riskDenominator = currentPrice - stopLoss
+      const riskRewardRatio = riskDenominator !== 0 ? (target - currentPrice) / riskDenominator : 0
 
       return {
         ticker: ticker.toUpperCase(),
@@ -163,7 +167,7 @@ export class StockAnalyzer {
         stop_loss: parseFloat(stopLoss.toFixed(2)),
         potential_gain: parseFloat((((target - currentPrice) / currentPrice) * 100).toFixed(2)),
         risk: parseFloat((((currentPrice - stopLoss) / currentPrice) * 100).toFixed(2)),
-        risk_reward_ratio: parseFloat(((target - currentPrice) / (currentPrice - stopLoss)).toFixed(2)),
+        risk_reward_ratio: parseFloat(riskRewardRatio.toFixed(2)),
         reasons,
         metrics,
         chartData,

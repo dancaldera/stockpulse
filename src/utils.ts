@@ -203,6 +203,9 @@ export function rsi(prices: number[], period: number = 14): number {
     avgLoss = (avgLoss * (period - 1) + (change < 0 ? -change : 0)) / period
   }
 
+  if (avgLoss === 0) {
+    return avgGain > 0 ? 100 : 50
+  }
   const rs = avgGain / avgLoss
   return 100 - 100 / (1 + rs)
 }

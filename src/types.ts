@@ -35,6 +35,11 @@ export interface StockSignal {
   metrics: StockMetrics
   chartData: ChartData
   timestamp: string
+  signal_summary?: {
+    bullish: number
+    bearish: number
+    total: number
+  }
 }
 
 export interface StockMetrics {

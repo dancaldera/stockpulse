@@ -1,12 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
   "files": {
-    "includes": [
-      "**/*.ts",
-      "**/*.json",
-      "!src/components/dashboard.components.ts",
-      "!src/dashboard.template.ts"
-    ]
+    "includes": ["**/*.ts", "**/*.json", "!src/components/dashboard.components.ts", "!src/dashboard.template.ts"]
   },
   "vcs": {
     "enabled": true,
@@ -15,10 +10,10 @@
   },
   "formatter": {
     "indentStyle": "space",
-    "lineWidth": 100
+    "lineWidth": 120
   },
   "linter": {
-    "enabled": false
+    "enabled": true
   },
   "assist": {
     "enabled": false
