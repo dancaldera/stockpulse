@@ -286,6 +286,14 @@ export const dashboardTemplate = () => html`
                 </div>
             \` : '';
 
+            // ATR explanation
+            const atrValue = stock.metrics?.atr ? stock.metrics.atr.toFixed(2) : null;
+            const atrExplanation = atrValue ? \`
+                <div style="margin-top: 8px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.8rem; color: var(--text-muted);">
+                    <strong>Why this target?</strong> Based on 2× ATR ($\${atrValue}). ATR measures typical 14-day price volatility. Higher volatility = wider price targets.
+                </div>
+            \` : '';
+
             const metrics = \`
                 \${signalSummary}
                 <div class="grid grid-3 mb-16">
@@ -293,6 +301,7 @@ export const dashboardTemplate = () => html`
                     \${MetricCard('Stop Loss', stock.stop_loss)}
                     \${MetricCard('Potential', \`\${stock.potential_gain >= 0 ? '+' : ''}\${stock.potential_gain}%\`, stock.potential_gain >= 0 ? 'positive' : 'negative')}
                 </div>
+                \${atrExplanation}
             \`;
 
             const technical = stock.metrics ? \`
@@ -303,6 +312,7 @@ export const dashboardTemplate = () => html`
                         \${stock.metrics.rsi ? \`<div><span style="color: var(--text-muted);">RSI:</span> \${stock.metrics.rsi.toFixed(2)}</div>\` : ''}
                         \${stock.metrics.macd !== null ? \`<div><span style="color: var(--text-muted);">MACD:</span> \${stock.metrics.macd.toFixed(2)}</div>\` : ''}
                         \${stock.metrics.bb_position ? \`<div><span style="color: var(--text-muted);">BB %:</span> \${(stock.metrics.bb_position * 100).toFixed(1)}%</div>\` : ''}
+                        \${stock.metrics.atr ? \`<div><span style="color: var(--text-muted);">ATR:</span> $\${stock.metrics.atr.toFixed(2)}</div>\` : ''}
                     </div>
                 </div>
             \` : '';
